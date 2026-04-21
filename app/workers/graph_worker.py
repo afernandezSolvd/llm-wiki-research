@@ -20,11 +20,12 @@ def maybe_rebuild_communities(workspace_id_str: str):
 
 
 async def _maybe_rebuild_async(workspace_id: uuid.UUID):
-    from app.core.redis import get_redis_pool
+    import redis.asyncio as aioredis
     from app.config import get_settings
 
     settings = get_settings()
-    redis = get_redis_pool()
+    # Fresh client per invocation — lru_cache'd pool is bound to a prior event loop
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
 
     debounce_key = f"kg:community_rebuild_lock:{workspace_id}"
     acquired = await redis.set(
@@ -69,8 +70,8 @@ def refresh_hot_pages_all_workspaces():
 
 
 async def _refresh_hot_pages_async():
+    import redis.asyncio as aioredis
     from app.core.db import AsyncSessionLocal
-    from app.core.redis import get_redis_pool
     from app.config import get_settings
     from app.models.workspace import Workspace
     from app.models.wiki_page import WikiPage
@@ -81,7 +82,8 @@ async def _refresh_hot_pages_async():
     from sqlalchemy import select
 
     settings = get_settings()
-    redis = get_redis_pool()
+    # Fresh client per invocation — lru_cache'd pool is bound to a prior event loop
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
 
     async with AsyncSessionLocal() as db:
         workspaces_result = await db.execute(
