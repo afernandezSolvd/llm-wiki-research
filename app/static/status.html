@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Context — System Status</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: ui-monospace, monospace; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+
+    header { padding: 14px 24px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.05em; }
+    header .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #1a1a1a; border: 1px solid #333; color: #888; }
+    #ws-selector { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    #ws-selector label { font-size: 11px; color: #555; }
+    #ws-select { background: #1a1a1a; border: 1px solid #333; color: #e0e0e0; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-family: inherit; cursor: pointer; }
+    #ws-select option { background: #1a1a1a; }
+    #conn-status { font-size: 11px; color: #555; display: flex; align-items: center; gap: 5px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+    .dot.ok { background: #22c55e; }
+    .dot.err { background: #ef4444; }
+
+    .tabs { display: flex; gap: 2px; padding: 0 24px; border-bottom: 1px solid #222; }
+    .tab { font-size: 12px; padding: 8px 16px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; user-select: none; }
+    .tab.active { color: #fff; border-bottom-color: #2563eb; }
+    .tab:hover:not(.active) { color: #aaa; }
+
+    main { padding: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+    .panel { background: #161616; border: 1px solid #222; border-radius: 8px; overflow: hidden; }
+    .panel-header { padding: 12px 16px; border-bottom: 1px solid #1e1e1e; display: flex; justify-content: space-between; align-items: center; }
+    .panel-header h2 { font-size: 12px; font-weight: 600; color: #aaa; letter-spacing: 0.08em; text-transform: uppercase; }
+    .panel-body { padding: 16px; min-height: 120px; }
+    .last-updated { font-size: 10px; color: #444; }
+
+    .badge-status { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .badge-healthy  { background: #052e16; color: #22c55e;  border: 1px solid #15803d; }
+    .badge-degraded { background: #1c1007; color: #f59e0b;  border: 1px solid #b45309; }
+    .badge-unreachable { background: #1c0a0a; color: #ef4444; border: 1px solid #b91c1c; }
+    .badge-queued   { background: #111;    color: #888;    border: 1px solid #333; }
+    .badge-running  { background: #0c1a2e; color: #60a5fa; border: 1px solid #1d4ed8; }
+    .badge-done     { background: #052e16; color: #22c55e;  border: 1px solid #15803d; font-weight: 700; }
+    .badge-failed   { background: #1c0a0a; color: #ef4444; border: 1px solid #b91c1c; }
+    .badge-cancelled { background: #111;  color: #666;    border: 1px solid #333; }
+
+    .component-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #1e1e1e; }
+    .component-row:last-child { border-bottom: none; }
+    .component-name { font-size: 12px; color: #ccc; }
+    .component-meta { font-size: 11px; color: #555; }
+
+    .jobs-summary { display: flex; gap: 20px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #1e1e1e; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 22px; font-weight: 700; color: #fff; }
+    .stat-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-running .stat-value { color: #60a5fa; }
+    .stat-failed .stat-value  { color: #ef4444; }
+
+    .job-entry { border-bottom: 1px solid #1e1e1e; cursor: pointer; }
+    .job-entry:last-child { border-bottom: none; }
+    .job-row { display: grid; grid-template-columns: 76px 1fr 76px 68px; gap: 8px; align-items: center; padding: 6px 0; }
+    .job-entry.expanded .job-row { border-bottom: 1px solid #1a1a1a; }
+    .job-source { font-size: 12px; color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .job-duration { font-size: 11px; color: #555; text-align: right; }
+    .job-progress { font-size: 11px; color: #60a5fa; background: #0c1a2e; border: 1px solid #1d4ed8; border-radius: 4px; padding: 6px 10px; margin-top: 2px; display: flex; align-items: center; gap: 8px; }
+    .job-progress::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #60a5fa; border-top-color: transparent; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+    .job-success { font-size: 11px; color: #22c55e; background: #052e16; border: 1px solid #15803d; border-radius: 4px; padding: 6px 10px; margin-top: 2px; display: none; }
+    .job-hint    { font-size: 11px; color: #f59e0b; background: #1c1007; border: 1px solid #b45309; border-radius: 4px; padding: 6px 10px; margin-top: 2px; display: none; }
+    .job-hint strong { display: block; margin-bottom: 2px; }
+    .job-entry.expanded .job-success { display: block; }
+    .job-entry.expanded .job-hint    { display: block; }
+    .component-hint { font-size: 11px; color: #f59e0b; margin-top: 4px; padding: 5px 8px; background: #1c1007; border: 1px solid #b45309; border-radius: 4px; }
+    .drift-hint { font-size: 11px; color: #888; margin-top: 4px; padding: 4px 0; }
+    .job-error { display: none; grid-column: 1/-1; font-size: 11px; color: #f87171; background: #1c0a0a; border: 1px solid #7f1d1d; border-radius: 4px; padding: 8px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
+    .job-entry.expanded .job-error { display: block; }
+
+    .section-title { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 6px; }
+    .section-title:first-child { margin-top: 0; }
+    .drift-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #1e1e1e; }
+    .drift-row:last-child { border-bottom: none; }
+    .drift-page { font-size: 12px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+    .drift-score { font-size: 11px; padding: 2px 7px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+    .drift-warning { background: #1c1007; color: #f59e0b; border: 1px solid #b45309; }
+    .drift-error   { background: #1c0a0a; color: #ef4444; border: 1px solid #b91c1c; }
+    .finding-row { padding: 6px 0; border-bottom: 1px solid #1e1e1e; }
+    .finding-row:last-child { border-bottom: none; }
+    .finding-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+    .finding-desc { font-size: 11px; color: #666; }
+
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .admin-table th { text-align: left; color: #555; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; padding: 6px 8px; border-bottom: 1px solid #222; }
+    .admin-table td { padding: 8px; border-bottom: 1px solid #1a1a1a; color: #ccc; }
+    .admin-table tr:last-child td { border-bottom: none; }
+    .num-alert { color: #ef4444; font-weight: 600; }
+    .num-ok    { color: #444; }
+
+    .empty-state { font-size: 12px; color: #444; text-align: center; padding: 28px 0; }
+    .loading-msg { font-size: 12px; color: #444; padding: 28px 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .error-msg   { font-size: 12px; color: #ef4444; padding: 20px 0; text-align: center; }
+    .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #333; border-top-color: #888; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Context Wiki — System Status</h1>
+  <span class="badge">v0.1</span>
+  <div id="ws-selector" style="display:none">
+    <label for="ws-select">Workspace</label>
+    <select id="ws-select" onchange="switchWorkspace(this.value)"></select>
+  </div>
+  <div id="conn-status"><span class="dot" id="conn-dot"></span><span id="conn-label">Connecting…</span></div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tab-dashboard" onclick="showTab('dashboard')">Dashboard</div>
+  <div class="tab" id="tab-admin" onclick="showTab('admin')" style="display:none">All Workspaces</div>
+</div>
+
+<div id="view-dashboard">
+  <main>
+    <div class="panel">
+      <div class="panel-header">
+        <h2>System Health</h2>
+        <span id="ts-components" class="last-updated"></span>
+      </div>
+      <div class="panel-body loading-msg" id="panel-components">
+        <span class="spinner"></span> Connecting…
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Background Jobs <span style="color:#444;font-weight:400">(last 24h)</span></h2>
+        <span id="ts-jobs" class="last-updated"></span>
+      </div>
+      <div class="panel-body loading-msg" id="panel-jobs">
+        <span class="spinner"></span> Connecting…
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Knowledge Quality</h2>
+        <span id="ts-quality" class="last-updated"></span>
+      </div>
+      <div class="panel-body loading-msg" id="panel-quality">
+        <span class="spinner"></span> Connecting…
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="view-admin" style="display:none; padding:24px">
+  <div id="panel-admin" class="loading-msg"><span class="spinner"></span> Loading…</div>
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let token = '';
+let wsId = '';
+let pollTimer = null;
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', bootstrap);
+
+async function bootstrap() {
+  try {
+    const data = await fetch('/api/v1/status/bootstrap').then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    token = data.access_token;
+
+    const sel = document.getElementById('ws-select');
+    data.workspaces.forEach(ws => {
+      const opt = document.createElement('option');
+      opt.value = ws.id;
+      opt.textContent = ws.slug + (ws.display_name !== ws.slug ? ' — ' + ws.display_name : '');
+      sel.appendChild(opt);
+    });
+
+    if (data.workspaces.length) {
+      wsId = data.workspaces[0].id;
+      sel.value = wsId;
+      document.getElementById('ws-selector').style.display = data.workspaces.length > 1 ? 'flex' : 'none';
+    }
+
+    // Show admin tab if platform_admin in JWT payload
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.is_platform_admin !== false) {   // service account is platform_admin
+        document.getElementById('tab-admin').style.display = '';
+      }
+    } catch (_) {}
+
+    setConnStatus(true);
+    refreshAll();
+    pollTimer = setInterval(refreshAll, 20000);
+  } catch (e) {
+    setConnStatus(false, e.message);
+    ['panel-components','panel-jobs','panel-quality'].forEach(id =>
+      document.getElementById(id).innerHTML = `<div class="error-msg">Bootstrap failed: ${escHtml(e.message)}</div>`
+    );
+  }
+}
+
+function setConnStatus(ok, msg) {
+  document.getElementById('conn-dot').className = 'dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('conn-label').textContent = ok ? 'Live' : ('Error: ' + (msg || ''));
+}
+
+function switchWorkspace(id) {
+  wsId = id;
+  refreshAll();
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('view-dashboard').style.display = name === 'dashboard' ? '' : 'none';
+  document.getElementById('view-admin').style.display    = name === 'admin'     ? '' : 'none';
+  if (name === 'admin') fetchAdmin();
+}
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
+async function apiFetch(path) {
+  const r = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+function ts() { return new Date().toLocaleTimeString(); }
+
+function setPanel(id, tsId, html) {
+  document.getElementById(id).className = 'panel-body';
+  document.getElementById(id).innerHTML = html;
+  document.getElementById(tsId).textContent = 'Updated ' + ts();
+}
+
+function setPanelError(id, tsId, msg) {
+  document.getElementById(id).className = 'panel-body';
+  document.getElementById(id).innerHTML = `<div class="error-msg">${escHtml(msg)}</div>`;
+  document.getElementById(tsId).textContent = 'Failed ' + ts();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Refresh all panels ───────────────────────────────────────────────────────
+function refreshAll() {
+  if (!wsId) return;
+  fetchComponents();
+  fetchJobs();
+  fetchQuality();
+}
+
+// ─── Health panel ─────────────────────────────────────────────────────────────
+async function fetchComponents() {
+  try {
+    const data = await apiFetch(`/api/v1/workspaces/${wsId}/status/components`);
+    const rows = data.components.map(c => {
+      const depth = c.queue_depth != null ? `<span class="component-meta">${c.queue_depth} queued&nbsp;&nbsp;</span>` : '';
+      const hint = c.status !== 'healthy' ? (COMPONENT_HINTS[c.name] || null) : null;
+      const detailText = c.detail ? `<span class="component-meta" style="color:#666">${escHtml(c.detail)}</span>` : '';
+      const hintBlock = hint ? `<div class="component-hint">⚠ ${escHtml(c.name)} is ${escHtml(c.status)} — ${escHtml(hint.fix)}</div>` : '';
+      return `<div class="component-row" style="flex-wrap:wrap">
+        <span class="component-name">${escHtml(c.name)}</span>
+        <span style="display:flex;gap:6px;align-items:center">${detailText}${depth}<span class="badge-status badge-${escHtml(c.status)}">${escHtml(c.status)}</span></span>
+        ${hintBlock}
+      </div>`;
+    }).join('');
+    setPanel('panel-components', 'ts-components', rows || '<div class="empty-state">No components.</div>');
+  } catch (e) { setPanelError('panel-components', 'ts-components', e.message); }
+}
+
+// ─── Jobs panel ───────────────────────────────────────────────────────────────
+async function fetchJobs() {
+  try {
+    const data = await apiFetch(`/api/v1/workspaces/${wsId}/status/jobs`);
+    const summary = `<div class="jobs-summary">
+      <div class="stat stat-running"><div class="stat-value">${data.total_running}</div><div class="stat-label">Running</div></div>
+      <div class="stat"><div class="stat-value">${data.total_queued}</div><div class="stat-label">Queued</div></div>
+      <div class="stat stat-failed"><div class="stat-value">${data.total_failed_24h}</div><div class="stat-label">Failed 24h</div></div>
+    </div>`;
+
+    const rows = data.jobs.map(j => {
+      const dur = j.duration_seconds != null ? fmtDur(j.duration_seconds) : j.started_at ? '…' : '';
+      const statusLabel = j.status === 'done' ? '✓ done' : j.status;
+      const progressBlock = j.progress
+        ? `<div class="job-progress">${escHtml(j.progress)}</div>`
+        : '';
+      const successBlock = j.status === 'done' && j.pages_touched != null
+        ? `<div class="job-success">✓ ${j.pages_touched} page${j.pages_touched !== 1 ? 's' : ''} written</div>`
+        : '';
+      const interp = interpretError(j.error_message);
+      const hintBlock = interp
+        ? `<div class="job-hint"><strong>⚠ ${escHtml(interp.title)}</strong>${escHtml(interp.fix)}</div>`
+        : '';
+      const errBlock = j.error_message
+        ? `<div class="job-error">${escHtml(j.error_message)}${j.retry_count ? `\n(${j.retry_count} retr${j.retry_count===1?'y':'ies'})` : ''}</div>`
+        : '';
+      return `<div class="job-entry" onclick="this.classList.toggle('expanded')">
+        <div class="job-row">
+          <span class="badge-status badge-${escHtml(j.queue)}">${escHtml(j.queue)}</span>
+          <span class="job-source" title="${escHtml(j.source_name||'')}">${escHtml(j.source_name||'—')}</span>
+          <span class="badge-status badge-${escHtml(j.status)}">${escHtml(statusLabel)}</span>
+          <span class="job-duration">${escHtml(dur)}</span>
+        </div>${progressBlock}${successBlock}${hintBlock}${errBlock}
+      </div>`;
+    }).join('');
+
+    setPanel('panel-jobs', 'ts-jobs', summary + (rows || '<div class="empty-state">No jobs in the last 24 hours.</div>'));
+  } catch (e) { setPanelError('panel-jobs', 'ts-jobs', e.message); }
+}
+
+function fmtDur(s) {
+  return s < 60 ? s.toFixed(1) + 's' : Math.floor(s/60) + 'm ' + Math.round(s%60) + 's';
+}
+
+// ─── Error interpreter ────────────────────────────────────────────────────────
+const ERROR_PATTERNS = [
+  { re: /Repo not initialized/i,
+    title: 'Git repo not initialized',
+    fix: 'The workspace git repository is missing. Recreate the workspace via the API to reinitialize it.' },
+  { re: /truth value of an array/i,
+    title: 'Internal worker bug (numpy array check)',
+    fix: 'A code defect caused this failure. Restart the worker and retry the job.' },
+  { re: /DatatypeMismatchError.*recursive|recursive query.*numeric.*double/i,
+    title: 'SQL type mismatch in graph traversal',
+    fix: 'A type conflict in the graph CTE. Deploy the latest worker code and retry.' },
+  { re: /duplicate key.*source_chunks|UniqueViolation.*source_chunks/i,
+    title: 'Duplicate source chunks',
+    fix: 'Chunk data from a previous partial run is blocking re-ingestion. Retry — the worker clears existing chunks before inserting.' },
+  { re: /UniqueViolation/i,
+    title: 'Database uniqueness conflict',
+    fix: 'A duplicate record was detected. Retry the job; idempotency logic will resolve the conflict.' },
+  { re: /IntegrityError/i,
+    title: 'Database integrity violation',
+    fix: 'A constraint was violated. Check the source data for duplicates or invalid references, then retry.' },
+  { re: /rate_limit|rate limit|overloaded_error|529/i,
+    title: 'Anthropic API rate limit or overload',
+    fix: 'The LLM API is throttling requests. Wait a few minutes and retry, or reduce concurrent ingest jobs.' },
+  { re: /authentication_error|invalid x-api-key|api.key/i,
+    title: 'Invalid Anthropic API key',
+    fix: 'Check ANTHROPIC_API_KEY in your .env file and restart the worker.' },
+  { re: /voyage|VOYAGE_API_KEY/i,
+    title: 'Voyage AI embedding error',
+    fix: 'Check VOYAGE_API_KEY in your .env file. Ensure the Voyage API is reachable and retry.' },
+  { re: /ConnectionRefusedError|could not connect|connection refused/i,
+    title: 'Service connection refused',
+    fix: 'A required service (database or Redis) rejected the connection. Run `docker compose ps` to verify all containers are healthy.' },
+  { re: /timeout|timed out/i,
+    title: 'Operation timed out',
+    fix: 'The job exceeded its time limit. Check worker CPU/memory usage and retry with a smaller source batch.' },
+  { re: /storage|download|S3|bucket/i,
+    title: 'Source file download failed',
+    fix: 'The source file could not be fetched from storage. Check storage credentials and that the file still exists.' },
+];
+
+function interpretError(msg) {
+  if (!msg) return null;
+  for (const p of ERROR_PATTERNS) {
+    if (p.re.test(msg)) return { title: p.title, fix: p.fix };
+  }
+  return null;
+}
+
+const COMPONENT_HINTS = {
+  ingest_worker:    { fix: 'Run `docker compose up -d worker` or check `docker compose logs worker`.' },
+  lint_worker:      { fix: 'Run `docker compose up -d worker` or check `docker compose logs worker`.' },
+  embedding_worker: { fix: 'Run `docker compose up -d worker` or check `docker compose logs worker`.' },
+  graph_worker:     { fix: 'Run `docker compose up -d worker` or check `docker compose logs worker`.' },
+  database:         { fix: 'Run `docker compose up -d db` and check `docker compose logs db`.' },
+  broker:           { fix: 'Run `docker compose up -d redis` and check `docker compose logs redis`.' },
+};
+
+// ─── Quality panel ────────────────────────────────────────────────────────────
+async function fetchQuality() {
+  try {
+    const data = await apiFetch(`/api/v1/workspaces/${wsId}/status/quality`);
+    let html = '';
+    if (data.drift_alerts.length) {
+      html += `<div class="section-title">Semantic Drift <span style="font-weight:400;color:#555;text-transform:none;font-size:10px">— page content has changed significantly from its original version</span></div>`;
+      html += data.drift_alerts.map(a => {
+        const action = a.severity === 'error'
+          ? 'Content has changed drastically. Re-ingest the source or manually review and reset the drift anchor via the API.'
+          : 'Content is drifting. Monitor or re-ingest the source to update this page.';
+        return `<div class="drift-row" style="flex-wrap:wrap;gap:4px">
+          <span class="drift-page" title="${escHtml(a.page_path)}">${escHtml(a.title||a.page_path)}</span>
+          <span class="drift-score drift-${escHtml(a.severity)}">${a.drift_score.toFixed(3)}</span>
+          <div class="drift-hint" style="width:100%">↳ ${escHtml(action)}</div>
+        </div>`;
+      }).join('');
+    }
+    if (data.lint_summary) {
+      const ls = data.lint_summary;
+      const LINT_HINTS = {
+        orphan:       'Page has no incoming links. Link to it from a related page or delete it if obsolete.',
+        contradiction:'Two pages make conflicting claims. Review both pages and reconcile the information.',
+        stale:        'Page content has not been updated recently. Re-ingest the source or manually review.',
+      };
+      html += `<div class="section-title">Lint — ${escHtml(ls.status)} · ${ls.finding_count} finding${ls.finding_count!==1?'s':''}</div>`;
+      html += ls.findings.map(f => {
+        const sev = f.severity==='error'?'failed':f.severity==='warning'?'degraded':'queued';
+        const hint = LINT_HINTS[f.finding_type] || null;
+        return `<div class="finding-row">
+          <div class="finding-meta">
+            <span class="badge-status badge-${sev}">${escHtml(f.severity)}</span>
+            <span style="font-size:11px;color:#888">${escHtml(f.finding_type)}</span>
+            ${f.page_title?`<span style="font-size:11px;color:#555">— ${escHtml(f.page_title)}</span>`:''}
+          </div>
+          <div class="finding-desc">${escHtml(f.description)}</div>
+          ${hint ? `<div class="drift-hint">↳ ${escHtml(hint)}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+    setPanel('panel-quality', 'ts-quality', html || '<div class="empty-state">✓ No drift alerts or lint findings.</div>');
+  } catch (e) { setPanelError('panel-quality', 'ts-quality', e.message); }
+}
+
+// ─── Admin panel ──────────────────────────────────────────────────────────────
+async function fetchAdmin() {
+  try {
+    const data = await apiFetch('/api/v1/admin/status');
+    if (!data.workspace_summaries.length) {
+      document.getElementById('panel-admin').innerHTML = '<div class="empty-state">No workspaces.</div>';
+      return;
+    }
+    const rows = data.workspace_summaries.map(w => {
+      const fj = w.failed_jobs_24h > 0 ? `<span class="num-alert">${w.failed_jobs_24h}</span>` : `<span class="num-ok">0</span>`;
+      const da = w.drift_alert_count > 0 ? `<span class="num-alert">${w.drift_alert_count}</span>` : `<span class="num-ok">0</span>`;
+      const lf = w.lint_finding_count > 0 ? `<span class="num-alert">${w.lint_finding_count}</span>` : `<span class="num-ok">0</span>`;
+      return `<tr>
+        <td>${escHtml(w.workspace_slug)}</td>
+        <td>${w.active_jobs}</td>
+        <td>${fj}</td><td>${da}</td><td>${lf}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('panel-admin').innerHTML = `
+      <p style="font-size:11px;color:#444;margin-bottom:12px">Updated ${ts()}</p>
+      <table class="admin-table">
+        <thead><tr><th>Workspace</th><th>Active</th><th>Failed 24h</th><th>Drift</th><th>Lint</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    document.getElementById('panel-admin').className = '';
+  } catch (e) {
+    document.getElementById('panel-admin').innerHTML = `<div class="error-msg">${escHtml(e.message)}</div>`;
+    document.getElementById('panel-admin').className = '';
+  }
+}
+</script>
+</body>
+</html>

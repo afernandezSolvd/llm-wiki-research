@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "context-wiki": {
+      "type": "stdio",
+      "command": "/Users/arleyfernandez/projects/context/.claude/mcp-context-wiki.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

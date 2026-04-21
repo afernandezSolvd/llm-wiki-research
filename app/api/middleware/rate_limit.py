@@ -19,16 +19,20 @@ ENDPOINT_LIMITS: dict[str, int] = {
     "/lint": settings.rate_limit_lint,
 }
 
-
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Skip rate limiting for read-only status/monitoring endpoints
+        if "/status" in path:
+            return await call_next(request)
+
         # Extract user ID from JWT (best effort; skip on auth errors)
         user_id = _extract_user_id(request)
         if user_id is None:
             return await call_next(request)
 
         # Determine limit for this endpoint
-        path = request.url.path
         limit = settings.rate_limit_default
         for pattern, lim in ENDPOINT_LIMITS.items():
             if pattern in path:

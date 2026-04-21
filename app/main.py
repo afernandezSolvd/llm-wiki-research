@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.api.middleware.audit import AuditMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
@@ -45,3 +46,8 @@ app.include_router(api_router)
 @app.get("/health")
 async def health():
     return {"status": "ok", "environment": settings.environment}
+
+
+@app.get("/status", include_in_schema=False)
+async def status_dashboard():
+    return FileResponse("app/static/status.html")

@@ -49,3 +49,10 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
   in worker files
 - Structured logging: `logger.info("event_name", key=value)` — never
   f-string log messages
+
+## Active Technologies
+- Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5 (001-status-web-gui)
+- PostgreSQL 16 via existing models; Redis 7 for queue depth (LLEN) (001-status-web-gui)
+
+## Recent Changes
+- 001-status-web-gui: Added Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5
