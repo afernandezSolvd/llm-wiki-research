@@ -1,0 +1,14 @@
+{
+  "name": "Migration Reminder on Model Edit",
+  "description": "Remind to create an Alembic migration after editing model files",
+  "triggers": [
+    {
+      "type": "fileEdit",
+      "filePattern": "app/models/**/*.py"
+    }
+  ],
+  "action": {
+    "type": "command",
+    "command": "echo 'Model file edited. If you added or changed columns/tables/indexes, create a migration: make revision msg=\"describe_your_change\"  (or: alembic revision --autogenerate -m \"...\")'  "
+  }
+}

@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Local data
+data/
+wiki_repos/
+
+# Test output
+.coverage
+htmlcov/
+.pytest_cache/
+*.xml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code — local-only settings (may contain personal preferences)
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+
+# Kiro — local-only overrides (may contain personal settings)
+.kiro/settings/mcp.local.json
+.kiro/settings/*.local.json
+
+# OS
+.DS_Store
+Thumbs.db

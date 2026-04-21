@@ -1,0 +1,14 @@
+{
+  "name": "Auto-ingest New Source Document",
+  "description": "When a file is saved to data/sources/, upload it to the wiki and trigger ingest",
+  "triggers": [
+    {
+      "type": "fileCreate",
+      "filePattern": "data/sources/**/*.{pdf,txt,md,docx}"
+    }
+  ],
+  "action": {
+    "type": "agent",
+    "prompt": "A new source file was just saved at: {{file.path}}\n\nDo the following:\n1. Determine the source type from the file extension (pdf, txt/md → text, docx → text).\n2. Upload the file to the Context API:\n   POST /api/v1/workspaces/$WS_ID/sources\n   Multipart: file=<file contents>, title=<filename without extension, spaces instead of hyphens>\n   Header: Authorization: Bearer $CONTEXT_API_TOKEN\n3. From the response, take the source 'id'.\n4. Trigger ingest:\n   POST /api/v1/workspaces/$WS_ID/ingest\n   Body: {\"source_ids\": [\"<id>\"]}\n5. Report: 'Ingest job <job_id> queued for <filename>. Poll GET /api/v1/workspaces/$WS_ID/ingest/<job_id> for status.'"
+  }
+}

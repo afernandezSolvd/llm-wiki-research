@@ -1,0 +1,14 @@
+{
+  "name": "Run Lint After Wiki Session",
+  "description": "Manually trigger a lint pass after a wiki editing session to catch inconsistencies",
+  "triggers": [
+    {
+      "type": "userTriggered",
+      "label": "Run lint after wiki edits"
+    }
+  ],
+  "action": {
+    "type": "agent",
+    "prompt": "Run a lint pass over the wiki to catch any inconsistencies introduced by recent edits:\n\n1. POST /api/v1/workspaces/$WS_ID/lint\n   Body: {\"scope\": \"full\"}\n   Header: Authorization: Bearer $CONTEXT_API_TOKEN\n\n2. Poll GET /api/v1/workspaces/$WS_ID/lint/<run_id> every 5 seconds until done.\n\n3. GET /api/v1/workspaces/$WS_ID/lint/<run_id>/findings\n\n4. Show findings grouped by severity:\n   - Errors: contradiction findings (show page_a vs page_b excerpts), semantic_drift errors\n   - Warnings: orphan pages, drift warnings\n\n5. For contradictions, ask: 'Would you like me to read both pages and suggest which version is correct?'\n6. For orphans, ask: 'Should I add a link to this page from index.md?'"
+  }
+}

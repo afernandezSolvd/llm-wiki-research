@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "context-wiki": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-openapi"],
+      "env": {
+        "OPENAPI_SPEC_URL": "http://localhost:8000/openapi.json",
+        "API_BASE_URL": "http://localhost:8000",
+        "API_BEARER_TOKEN": "${CONTEXT_API_TOKEN}"
+      },
+      "description": "Context Wiki API — ingest, query, lint, wiki pages, knowledge graph"
+    }
+  }
+}

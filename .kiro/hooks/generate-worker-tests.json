@@ -1,0 +1,14 @@
+{
+  "name": "Generate Tests for New Worker",
+  "description": "When a new *_worker.py file is created, scaffold a unit test file for its pure functions",
+  "triggers": [
+    {
+      "type": "fileCreate",
+      "filePattern": "app/workers/*_worker.py"
+    }
+  ],
+  "action": {
+    "type": "agent",
+    "prompt": "A new worker file was created at {{file.path}}.\n\nRead the file and identify:\n1. The Celery task function (sync, decorated with @celery_app.task)\n2. The async helper function and what DB/LLM operations it performs\n3. Any pure utility functions (like _cosine_distance, _extract_text) that take only plain Python values\n\nCreate a test file at tests/unit/test_{{file.stem}}.py that:\n- Imports and tests each pure utility function\n- Tests normal inputs, None inputs, empty inputs, and boundary values\n- Follows the pattern in tests/unit/test_drift.py\n- Does NOT import AsyncSessionLocal, get_redis_pool, or celery_app\n- Adds a TODO comment for future integration test of the async helper\n\nDo not mock _cosine_distance or similar math functions — test them with real vectors."
+  }
+}

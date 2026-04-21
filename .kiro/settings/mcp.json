@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "context-api": {
+      "type": "http",
+      "url": "http://localhost:8000",
+      "description": "Context Wiki API — ingest, query, lint, wiki pages, knowledge graph",
+      "headers": {
+        "Authorization": "Bearer ${CONTEXT_API_TOKEN}"
+      },
+      "openApiSpec": "http://localhost:8000/openapi.json"
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "${DATABASE_URL}"
+      },
+      "description": "Direct PostgreSQL access for schema inspection and debugging"
+    }
+  }
+}

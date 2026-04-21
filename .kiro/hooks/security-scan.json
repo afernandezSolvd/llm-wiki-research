@@ -1,0 +1,14 @@
+{
+  "name": "Pre-commit Security Scan",
+  "description": "Scan staged files for API keys, tokens, and credentials before committing",
+  "triggers": [
+    {
+      "type": "userTriggered",
+      "label": "Security scan before commit"
+    }
+  ],
+  "action": {
+    "type": "command",
+    "command": "git diff --cached | grep -E '(sk-ant-api|pa-[A-Za-z0-9]{40}|AKIA[A-Z0-9]{16}|aws_secret_access_key\\s*=\\s*[^$]|password\\s*=\\s*[\"'\\''\"'][^\"\\'\\''\"']{8,}[\"'\\''\"'])' && echo 'BLOCKED: Potential credential detected in staged changes. Remove it and try again.' && exit 1 || echo 'Security scan passed — no credentials detected in staged changes.'"
+  }
+}
