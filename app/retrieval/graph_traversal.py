@@ -59,7 +59,7 @@ async def traverse_graph(
                     n.id,
                     n.wiki_page_id,
                     0 AS depth,
-                    1.0 AS cumulative_weight
+                    1.0::double precision AS cumulative_weight
                 FROM kg_nodes n
                 WHERE n.workspace_id = :workspace_id
                   AND n.id = ANY(:seed_ids)

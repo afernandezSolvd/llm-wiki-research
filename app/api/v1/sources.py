@@ -149,8 +149,10 @@ async def ingest_from_url(
     import hashlib
     import httpx
 
+    fetch_url = _normalize_url(body.url)
+
     async with httpx.AsyncClient(follow_redirects=True, timeout=30) as http:
-        resp = await http.get(body.url)
+        resp = await http.get(fetch_url)
         resp.raise_for_status()
         data = resp.content
         content_type = resp.headers.get("content-type", "text/html")
@@ -180,6 +182,20 @@ async def ingest_from_url(
     await db.commit()
     await db.refresh(source)
     return source
+
+
+def _normalize_url(url: str) -> str:
+    """Rewrite well-known rendered URLs to their raw/plain-text equivalents."""
+    import re
+    # GitHub Gist: https://gist.github.com/{user}/{id} → raw content
+    m = re.match(r"https://gist\.github\.com/([^/]+/[a-f0-9]+)(?:/.*)?$", url)
+    if m:
+        return f"https://gist.githubusercontent.com/{m.group(1)}/raw"
+    # GitHub file view: https://github.com/{user}/{repo}/blob/{ref}/{path}
+    m = re.match(r"https://github\.com/(.+)/blob/(.+)", url)
+    if m:
+        return f"https://raw.githubusercontent.com/{m.group(1)}/{m.group(2)}"
+    return url
 
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)

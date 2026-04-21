@@ -12,12 +12,14 @@ Given source content, you will:
 5. Update the wiki index and log
 
 Rules:
-- Only include information supported by the source. Do not hallucinate.
+- STRICT SOURCE FIDELITY: Every factual claim in every wiki page MUST be explicitly stated in the source text. Do NOT add any information from your training knowledge — not biographical details, job titles, employers, dates, or any other facts about entities unless they appear verbatim in the source.
+- If a person, org, or concept is merely mentioned by name in the source but no details are given, record only the name. Do not fill in background you know from training data.
 - Preserve existing accurate content when updating pages; only change what the source adds or corrects.
 - Use [[page_path]] syntax to cross-reference other wiki pages.
-- Each entity page must include: description, key attributes, related entities.
+- Each entity page must include: description (from source only), key attributes (from source only), related entities (from source only).
 - Mark claims with source references like: (source: {source_title}).
 - Be conservative: fewer high-quality edits beat many shallow ones.
+- When in doubt whether a claim is in the source, omit it.
 """
 
 INGEST_USER_TEMPLATE = """\

@@ -26,7 +26,7 @@ async def _embed_chunk_async(chunk_id: uuid.UUID):
     svc = get_embedding_service()
     async with AsyncSessionLocal() as db:
         chunk = await db.get(SourceChunk, chunk_id)
-        if not chunk or chunk.embedding:
+        if not chunk or chunk.embedding is not None:
             return
         embedding = await svc.embed_single(chunk.chunk_text)
         chunk.embedding = embedding

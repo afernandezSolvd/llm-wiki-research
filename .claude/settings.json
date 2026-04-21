@@ -2,64 +2,42 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": {
-          "tool_name": "Edit",
-          "file_pattern": "app/**/*.py"
-        },
+        "matcher": "Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/arleyfernandez/projects/context && ruff check --select E,F,W --fix \"$CLAUDE_TOOL_INPUT_FILE_PATH\" 2>&1 | head -20"
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "tool_name": "Edit",
-          "file_pattern": "alembic/versions/**/*.py"
-        },
-        "hooks": [
+            "if": "Edit(app/**/*.py)",
+            "command": "cd /Users/arleyfernandez/projects/context && jq -r '.tool_input.file_path' | { read -r f; ruff check --select E,F,W --fix \"$f\" 2>&1 | head -20; } 2>/dev/null || true"
+          },
           {
             "type": "command",
+            "if": "Edit(alembic/versions/**/*.py)",
             "command": "echo 'Migration edited — remember to test the downgrade path: alembic downgrade -1 && alembic upgrade head'"
           }
         ]
       },
       {
-        "matcher": {
-          "tool_name": "Write",
-          "file_pattern": "app/**/*.py"
-        },
+        "matcher": "Write",
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/arleyfernandez/projects/context && ruff check --select E,F,W --fix \"$CLAUDE_TOOL_INPUT_FILE_PATH\" 2>&1 | head -20"
+            "if": "Write(app/**/*.py)",
+            "command": "cd /Users/arleyfernandez/projects/context && jq -r '.tool_input.file_path' | { read -r f; ruff check --select E,F,W --fix \"$f\" 2>&1 | head -20; } 2>/dev/null || true"
           }
         ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": {
-          "tool_name": "Bash",
-          "command_pattern": ".*alembic downgrade.*"
-        },
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'WARNING: alembic downgrade modifies the database schema. Confirm this is intentional before proceeding.' && exit 1"
-          }
-        ]
-      },
-      {
-        "matcher": {
-          "tool_name": "Bash",
-          "command_pattern": ".*docker.*rm.*|.*drop.*table.*|.*truncate.*"
-        },
-        "hooks": [
+            "command": "cmd=$(jq -r '.tool_input.command'); echo \"$cmd\" | grep -q 'alembic downgrade' && printf '{\"continue\": false, \"stopReason\": \"WARNING: alembic downgrade modifies the database schema. Confirm this is intentional before proceeding.\"}' || true"
+          },
           {
             "type": "command",
-            "command": "echo 'WARNING: Destructive database operation detected. Please confirm explicitly.' && exit 1"
+            "command": "cmd=$(jq -r '.tool_input.command'); echo \"$cmd\" | grep -qE '(docker[[:space:]]+.*[[:space:]]+rm|drop[[:space:]]+(table|database)|truncate[[:space:]])' && printf '{\"continue\": false, \"stopReason\": \"WARNING: Destructive database operation detected. Please confirm explicitly.\"}' || true"
           }
         ]
       }

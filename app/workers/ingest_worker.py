@@ -70,6 +70,12 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
     redis = aioredis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
     client = get_anthropic_client()
 
+    async def _progress(stage: str) -> None:
+        try:
+            await redis.set(f"ingest:progress:{job_id}", stage, ex=86400)
+        except Exception:
+            pass
+
     async with _SessionLocal() as db:
         # Load job
         job = await db.get(IngestJob, job_id)
@@ -93,14 +99,17 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
 
         # Load sources + chunk + embed
         pages_touched_ids: list[uuid.UUID] = []
+        new_page_ids: list[uuid.UUID] = []  # pages created this job — drift anchor finalized on success
         total_usage = {"input_tokens": 0, "output_tokens": 0,
                        "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
 
-        for source_id in source_ids:
+        for src_idx, source_id in enumerate(source_ids, 1):
             source = await db.get(Source, source_id)
             if not source:
                 continue
 
+            src_label = f"[{src_idx}/{len(source_ids)}] {source.title[:40]}"
+            await _progress(f"loading {src_label}")
             source.ingest_status = "processing"
             await db.commit()
 
@@ -115,8 +124,17 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                 continue
 
             # Chunk + embed
+            await _progress(f"chunking {src_label}")
             chunks = embed_svc.chunk_text(raw_text)
+            await _progress(f"embedding {len(chunks)} chunks — {src_label}")
             embeddings = await embed_svc.embed_texts(chunks)
+
+            # Clear existing chunks for idempotent re-ingestion
+            from sqlalchemy import delete as sa_delete
+            await db.execute(
+                sa_delete(SourceChunk).where(SourceChunk.source_id == source_id)
+            )
+            await db.flush()
 
             now_str = datetime.now(UTC).isoformat()
             for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
@@ -132,6 +150,7 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
             await db.flush()
 
             # --- Build wiki context via hybrid retrieval ---
+            await _progress(f"retrieving context — {src_label}")
             source_summary = raw_text[:8000]
             source_embedding = await embed_svc.embed_single(source_summary)
 
@@ -182,6 +201,7 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                 .replace("${wiki_context}", wiki_context)
             )
 
+            await _progress(f"LLM generating — {src_label}")
             # LLM call
             response = client.messages.create(
                 model=settings.anthropic_model,
@@ -217,9 +237,11 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                     continue
 
                 # Gate is enabled — verify proposed edit against source before committing
+                # Include title so title-derived attributions (e.g. "by Author") are valid
+                source_with_title = f"Source title: {source.title}\n---\n{source_summary[:5900]}"
                 verify_user = (
                     VERIFY_USER_TEMPLATE
-                    .replace("${source_content}", source_summary[:6000])
+                    .replace("${source_content}", source_with_title)
                     .replace("${page_title}", edit.title)
                     .replace("${page_content}", edit.content[:3000])
                 )
@@ -264,6 +286,7 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
 
                 verified_edits.append(edit)
 
+            await _progress(f"applying {len(verified_edits)} edits — {src_label}")
             # Apply page edits
             for edit in verified_edits:
                 old_content = repo.read_file(edit.page_path) or ""
@@ -295,15 +318,16 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                         git_commit_sha=sha,
                         word_count=word_count,
                         embedding=new_embedding,
-                        original_embedding=new_embedding,  # anchored at creation, never updated
+                        original_embedding=new_embedding,  # finalized at job success below
                         updated_by=job.triggered_by,
                         created_by=job.triggered_by,
                     )
                     db.add(page)
                     await db.flush()
+                    new_page_ids.append(page.id)
                 else:
                     # Capture old embedding BEFORE overwriting — used for drift score below
-                    old_embedding = list(page.embedding) if page.embedding else None
+                    old_embedding = list(page.embedding) if page.embedding is not None else None
                     drift = _cosine_distance(old_embedding, new_embedding)
                     page.title = edit.title
                     page.page_type = edit.page_type
@@ -357,6 +381,7 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                 pages_touched_ids.append(page.id)
                 await db.flush()
 
+            await _progress(f"upserting KG — {src_label}")
             # Upsert KG entities + relations
             entity_name_to_id: dict[str, uuid.UUID] = {}
             for entity in ingest_result.kg_entities:
@@ -378,6 +403,19 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
 
             source.ingest_status = "done"
             await db.commit()
+
+        # Re-anchor original_embedding for all pages created this job now that
+        # the job succeeded. If the job had failed and rolled back, no anchor
+        # would have been locked in from partial/low-context LLM output.
+        if new_page_ids:
+            from sqlalchemy import update as sa_update
+            await db.execute(
+                sa_update(WikiPage)
+                .where(WikiPage.id.in_(new_page_ids))
+                .values(original_embedding=WikiPage.embedding)
+            )
+            await db.commit()
+            await _progress(f"anchored {len(new_page_ids)} new page(s)")
 
         # Mark hot pages dirty if any touched pages are in hot set
         top_ids = set(str(i) for i in await get_top_page_ids(redis, workspace_id, settings.hot_pages_cache_top_n))
