@@ -53,6 +53,8 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
 ## Active Technologies
 - Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5 (001-status-web-gui)
 - PostgreSQL 16 via existing models; Redis 7 for queue depth (LLEN) (001-status-web-gui)
+- Python 3.12 (backend), Node.js 20 / TypeScript (portal frontend) (002-docs-browser-gui)
+- PostgreSQL 16 — no new tables; read-only queries against existing `wiki_pages`, `sources`, `workspaces`, `wiki_page_source_maps` (002-docs-browser-gui)
 
 ## Recent Changes
 - 001-status-web-gui: Added Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5
