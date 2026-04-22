@@ -17,20 +17,21 @@
    - [Lint: Quality Checks](#63-lint-quality-checks)
    - [Schema: Defining Your Knowledge Structure](#64-schema-defining-your-knowledge-structure)
 7. [API Reference](#7-api-reference)
-8. [Knowledge Graph](#8-knowledge-graph)
-9. [Semantic Drift & Quality Monitoring](#9-semantic-drift--quality-monitoring)
-10. [Hallucination Gate](#10-hallucination-gate)
-11. [Prompt Caching & Performance](#11-prompt-caching--performance)
-12. [Background Workers](#12-background-workers)
-13. [Git-Backed Storage](#13-git-backed-storage)
-14. [Database Schema](#14-database-schema)
-15. [Rate Limits](#15-rate-limits)
-16. [Operations & Monitoring](#16-operations--monitoring)
-17. [Scaling Guide](#17-scaling-guide)
-18. [Examples: End-to-End Team Workflows](#18-examples-end-to-end-team-workflows)
-19. [Troubleshooting](#19-troubleshooting)
-20. [Claude Code Integration](#20-claude-code-integration)
-21. [Kiro Integration](#21-kiro-integration)
+8. [Portal — Read-Only Web UI](#8-portal--read-only-web-ui)
+9. [Knowledge Graph](#9-knowledge-graph)
+10. [Semantic Drift & Quality Monitoring](#10-semantic-drift--quality-monitoring)
+11. [Hallucination Gate](#11-hallucination-gate)
+12. [Prompt Caching & Performance](#12-prompt-caching--performance)
+13. [Background Workers](#13-background-workers)
+14. [Git-Backed Storage](#14-git-backed-storage)
+15. [Database Schema](#15-database-schema)
+16. [Rate Limits](#16-rate-limits)
+17. [Operations & Monitoring](#17-operations--monitoring)
+18. [Scaling Guide](#18-scaling-guide)
+19. [Examples: End-to-End Team Workflows](#19-examples-end-to-end-team-workflows)
+20. [Troubleshooting](#20-troubleshooting)
+21. [Claude Code Integration](#21-claude-code-integration)
+22. [Kiro Integration](#22-kiro-integration)
 
 ---
 
@@ -175,7 +176,10 @@ make up
 curl http://localhost:8000/health
 # → {"status": "ok", "environment": "development"}
 
-# 5. View worker dashboard
+# 5. Open the wiki portal (read-only browser UI)
+open http://localhost:3000
+
+# 6. View worker dashboard
 open http://localhost:5555   # Flower UI
 ```
 
@@ -239,6 +243,9 @@ STORAGE_LOCAL_ROOT=./data/sources
 
 # ── Wiki Git ─────────────────────────────────────────────────
 WIKI_REPOS_ROOT=./wiki_repos
+
+# ── Portal ───────────────────────────────────────────────────
+PUBLIC_API_ENABLED=true           # set false to disable the read-only portal API
 
 # ── Quality Controls ─────────────────────────────────────────
 DRIFT_ALERT_THRESHOLD=0.35        # cosine distance from original embedding
@@ -815,6 +822,66 @@ All endpoints are under `/api/v1`. Authentication uses `Authorization: Bearer <a
 |--------|------|------|-------|
 | GET | `/admin/cost-report` | platform_admin | Param: `workspace_id` (optional filter). Token + cost by workspace. |
 | GET | `/admin/users` | platform_admin | All users in the system. |
+
+### Public API (no authentication)
+
+All routes are under `/api/v1/public`. No `Authorization` header required. Enabled/disabled via `PUBLIC_API_ENABLED` env var (returns `503` when disabled).
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/public/workspaces` | All workspaces (non-deleted) |
+| GET | `/public/workspaces/{id}/pages` | Params: `page_type`, `limit` (max 200), `offset` |
+| GET | `/public/workspaces/{id}/pages/{path}` | Full page content from git. `path` uses `/` not `%2F`. |
+| GET | `/public/workspaces/{id}/sources` | Params: `status_filter`, `limit` (max 200), `offset` |
+| GET | `/public/workspaces/{id}/sources/{sid}/pages` | Pages produced by a specific source |
+| GET | `/public/workspaces/{id}/search` | Params: `q` (min 2 chars, required), `limit` (max 50). Title matches ranked first. |
+
+These endpoints are consumed by the portal at `http://localhost:3000` but can be called directly from any HTTP client.
+
+---
+
+## 8. Portal — Read-Only Web UI
+
+The portal is a Vite + React SPA that exposes the wiki to users who don't need API access. It runs as a separate Docker service on port 3000 and connects to the public API described above.
+
+### Access
+
+```
+http://localhost:3000        # Docker (make up)
+http://localhost:5173        # Local dev (cd portal && npm run dev)
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| Browse pages | Sidebar lists all pages grouped by type; click to read Markdown |
+| Sources audit | See every ingested source, its status, and the pages it produced |
+| Search | Full-text search with context snippets (300ms debounce) |
+| Multi-workspace | Workspace picker in the header; switching reloads all content |
+
+### Enabling / Disabling
+
+Set `PUBLIC_API_ENABLED=false` in `.env` to disable the portal API (all endpoints return `503`). The portal itself still serves static files — users see "Unable to connect" instead of content.
+
+### Architecture
+
+```
+Browser → nginx (port 3000)
+              ├── /           → React SPA (static)
+              └── /api/*      → proxy → FastAPI (port 8000)
+```
+
+The nginx proxy eliminates CORS issues in production. The Vite dev server (`npm run dev`) has the same `/api` proxy configured in `vite.config.ts`.
+
+### Local Development
+
+```bash
+cd portal
+npm install
+npm run dev       # http://localhost:5173 — hot-reload, proxies /api to localhost:8000
+npm run build     # production bundle → dist/
+```
 
 ---
 
