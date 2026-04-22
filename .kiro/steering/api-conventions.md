@@ -1,8 +1,13 @@
 # API Conventions
 
 ## Authentication
-All endpoints except /auth/* require:
+All endpoints except /auth/* and /public/* require:
   Authorization: Bearer <access_token>
+
+## Public API (no authentication)
+Routes under /api/v1/public/* are unauthenticated and read-only.
+They are guarded by PUBLIC_API_ENABLED (env var); when false all routes return 503.
+Consumed by the portal SPA at port 3000. Never expose write operations here.
 
 Roles (IntEnum): reader=1 < editor=2 < admin=3
 Platform admins (is_platform_admin=True) bypass all workspace role checks.

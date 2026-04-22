@@ -51,10 +51,11 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
   f-string log messages
 
 ## Active Technologies
-- Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5 (001-status-web-gui)
-- PostgreSQL 16 via existing models; Redis 7 for queue depth (LLEN) (001-status-web-gui)
-- Python 3.12 (backend), Node.js 20 / TypeScript (portal frontend) (002-docs-browser-gui)
-- PostgreSQL 16 — no new tables; read-only queries against existing `wiki_pages`, `sources`, `workspaces`, `wiki_page_source_maps` (002-docs-browser-gui)
+- Python 3.12, FastAPI, SQLAlchemy 2.0 async (backend)
+- Node.js 20, TypeScript, Vite, React (portal frontend — `portal/`)
+- PostgreSQL 16 + pgvector, Redis 7 (data layer)
 
 ## Recent Changes
-- 001-status-web-gui: Added Python 3.12 (backend, existing), HTML5/ES2022 (frontend, + FastAPI + SQLAlchemy 2.0 async (existing), Celery 5
+- Added read-only portal (`portal/`) — Vite + React SPA at port 3000
+- Added public API router (`app/api/v1/public.py`) — 6 unauthenticated endpoints under `/api/v1/public/`, guarded by `PUBLIC_API_ENABLED` env var
+- Added status dashboard — HTML/ES2022 frontend showing ingest queue health
