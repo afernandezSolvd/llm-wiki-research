@@ -1,27 +1,24 @@
 #!/usr/bin/env bash
-# MCP server wrapper — auto-fetches a long-lived bootstrap token at startup.
-# Retries until the API is ready (handles race at docker compose start).
+# MCP server wrapper — routes all requests through the auth proxy which
+# handles token refresh automatically. No credentials needed here.
 
-API="http://localhost:8000/api/v1/status/bootstrap"
-TOKEN=""
-RETRIES=10
+PROXY="http://localhost:8001"
+RETRIES=20
 
 for i in $(seq 1 $RETRIES); do
-  TOKEN=$(curl -sf "$API" | jq -r '.access_token // empty')
-  if [ -n "$TOKEN" ]; then
+  if curl -sf "${PROXY}/health" > /dev/null 2>&1; then
     break
   fi
+  if [ "$i" = "$RETRIES" ]; then
+    echo "[mcp-context-wiki] ERROR: auth proxy not ready after ${RETRIES} attempts" >&2
+    exit 1
+  fi
+  echo "[mcp-context-wiki] waiting for auth proxy... (${i}/${RETRIES})"
   sleep 3
 done
 
-if [ -z "$TOKEN" ]; then
-  echo "[mcp-context-wiki] ERROR: could not fetch bootstrap token after ${RETRIES} attempts" >&2
-  exit 1
-fi
-
 exec npx -y @ivotoby/openapi-mcp-server \
-  --openapi-spec "http://localhost:8000/openapi.json" \
-  --api-base-url "http://localhost:8000" \
-  --headers "Authorization:Bearer $TOKEN" \
+  --openapi-spec "${PROXY}/openapi.json" \
+  --api-base-url "${PROXY}" \
   --name "context-wiki" \
   --transport stdio
