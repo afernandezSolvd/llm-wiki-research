@@ -84,7 +84,9 @@ async def bootstrap(db: AsyncSession = Depends(get_db)) -> BootstrapResponse:
         await db.refresh(service_user)
         logger.info("status.bootstrap.service_account_created", user_id=str(service_user.id))
 
-    token = create_access_token(service_user.id)
+    # Long-lived token — this is a read-only service account used by the MCP server
+    # process, which may run for days without restarting.
+    token = create_access_token(service_user.id, expires_delta=timedelta(days=365))
 
     workspaces = (await db.execute(
         select(Workspace).where(Workspace.deleted_at.is_(None)).order_by(Workspace.created_at)

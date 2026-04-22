@@ -11,8 +11,11 @@ settings = get_settings()
 ALGORITHM = settings.algorithm
 
 
-def create_access_token(user_id: uuid.UUID) -> str:
-    expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
+def create_access_token(user_id: uuid.UUID, expires_delta: timedelta | None = None) -> str:
+    expire = datetime.now(UTC) + (
+        expires_delta if expires_delta is not None
+        else timedelta(minutes=settings.access_token_expire_minutes)
+    )
     return jwt.encode(
         {"sub": str(user_id), "exp": expire, "type": "access"},
         settings.secret_key,
