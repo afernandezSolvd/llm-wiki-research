@@ -50,3 +50,7 @@ Thumbs.db
 
 data/**
 wiki_repos/**
+
+# Portal frontend
+portal/node_modules/
+portal/dist/

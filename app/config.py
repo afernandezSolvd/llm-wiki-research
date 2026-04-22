@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +59,9 @@ class Settings(BaseSettings):
     # Hot pages cache
     hot_pages_cache_top_n: int = 10
     hot_pages_cache_ttl_seconds: int = 900
+
+    # Public read-only portal API
+    public_api_enabled: bool = True
 
     # App
     environment: str = "development"
