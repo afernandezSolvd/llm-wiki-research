@@ -4,7 +4,8 @@
       "type": "stdio",
       "command": "/Users/arleyfernandez/projects/context/.claude/mcp-context-wiki.sh",
       "args": [],
-      "env": {}
+      "env": {},
+      "description": "Context Wiki API — ingest, query, lint, wiki pages, knowledge graph"
     }
   }
 }
