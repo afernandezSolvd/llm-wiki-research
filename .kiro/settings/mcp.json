@@ -1,10 +1,9 @@
 {
   "mcpServers": {
-    "context-api": {
+    "context-wiki": {
       "type": "http",
-      "url": "http://localhost:8001",
-      "description": "Context Wiki API — routed via auth proxy which handles token refresh automatically",
-      "openApiSpec": "http://localhost:8001/openapi.json"
+      "url": "http://localhost:8001/mcp",
+      "description": "Context Wiki — 13 purpose-built tools via auth proxy (token managed automatically)"
     },
     "postgres": {
       "command": "npx",

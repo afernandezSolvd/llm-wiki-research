@@ -28,6 +28,21 @@ backed by PostgreSQL with pgvector for semantic search.
 - Models: `app/models/*.py`
 - Config: `app/config.py` (Pydantic Settings, reads from `.env`)
 - Portal: `portal/src/main.tsx` → `portal/src/components/Layout.tsx`
+- MCP server: `app/mcp/server.py` (FastMCP, 13 tools) — stdio via `.claude/mcp-context-wiki.sh`, HTTP at `POST /mcp`
+
+## MCP Tools (13 purpose-built)
+- `list_workspaces`, `get_workspace_status` — workspace discovery
+- `ingest_url`, `ingest_file`, `get_ingest_status` — source ingestion
+- `query_wiki` — hybrid retrieval (vector + KG) + LLM answer with citations
+- `list_wiki_pages`, `get_wiki_page`, `create_wiki_page`, `update_wiki_page` — wiki CRUD
+- `list_sources` — source listing
+- `trigger_lint` — quality/drift checks
+- `search_tools` — on-demand tool schema lookup
+
+## MCP Setup
+- **Claude Code**: stdio via `.claude/mcp-context-wiki.sh` → `docker compose exec -T api python -m app.mcp.server`
+- **Kiro**: HTTP via auth proxy at `http://localhost:8001/mcp` (token auto-managed) or direct at `http://localhost:8000/mcp` with `Authorization: Bearer <token>`
+- Auth proxy (`tools/mcp_auth_proxy.py`) runs at `:8001`, auto-refreshes tokens from `/api/v1/status/bootstrap`
 
 ## Development
 - `make up` starts everything via docker-compose

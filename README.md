@@ -2045,40 +2045,86 @@ Add to `.claude/settings.json`:
 | `PostToolUse` on `Edit` (migrations) | After editing any migration | Remind to test the downgrade path |
 | `PreToolUse` on `Bash` (downgrade) | Before running alembic downgrade | Block + warn, requires explicit confirmation |
 
-### 20.5 — MCP Server: Direct API Access
+### 20.5 — MCP Server: Purpose-Built Python Tools
 
-Configure Claude Code to talk directly to the Context API as MCP tools — so instead of writing `curl` commands, Claude calls `ingest_source`, `query_wiki`, etc. as native tools.
+The project ships a purpose-built FastMCP server (`app/mcp/server.py`) with 13 intent-focused tools. This replaces the old OpenAPI-mirror approach — instead of 70+ raw REST endpoints, Claude gets a small set of composite, well-described tools that mirror how a developer actually uses the wiki.
 
-Create `.claude/mcp.json`:
+#### How it works
+
+```
+Claude Code (stdio) ──► .claude/mcp-context-wiki.sh
+                              │
+                              ├─ waits for auth proxy health at :8001
+                              └─ docker compose exec -T api python -m app.mcp.server
+                                      │
+                                      └─ FastMCP over stdio (13 tools)
+                                         direct in-process DB + git access
+```
+
+No token management needed — the server runs inside the Docker container with the full app environment. The auth proxy health check ensures the stack is up before Claude tries to connect.
+
+#### `.claude/mcp.json` (committed, no secrets)
 
 ```json
 {
   "mcpServers": {
     "context-wiki": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-openapi"],
-      "env": {
-        "OPENAPI_SPEC_URL": "http://localhost:8000/openapi.json",
-        "API_BASE_URL": "http://localhost:8000",
-        "API_BEARER_TOKEN": "${CONTEXT_API_TOKEN}"
-      }
+      "type": "stdio",
+      "command": "/path/to/repo/.claude/mcp-context-wiki.sh",
+      "args": [],
+      "env": {},
+      "description": "Context Wiki API — ingest, query, lint, wiki pages, knowledge graph"
     }
   }
 }
 ```
 
-Set the token in your shell:
+Replace `/path/to/repo` with the absolute path to your clone. The path is already set correctly in the committed `.mcp.json` at the repo root.
+
+#### Prerequisites
+
 ```bash
-export CONTEXT_API_TOKEN="eyJ..."   # add to ~/.zshrc
+# The Docker stack must be running before Claude Code connects
+make up
+
+# Verify the auth proxy is healthy (the wrapper script checks this too)
+curl http://localhost:8001/health
 ```
 
-With this configured, Claude Code can directly call:
-- `ingest_source` — upload and process a file
-- `query_wiki` — ask a question
-- `run_lint` — trigger a lint pass
-- `get_wiki_page` — read a specific page
+#### The 13 tools
 
-Without MCP, Claude uses `curl` through the Bash tool. With MCP, it calls these as first-class tools with schema validation.
+| Tool | What it does |
+|------|-------------|
+| `list_workspaces` | Returns all workspaces with member counts |
+| `get_workspace_status` | Aggregates quality + jobs + components into one status payload |
+| `ingest_url` | Creates a source record and triggers ingest in one call |
+| `ingest_file` | Uploads base64 file content and triggers ingest |
+| `get_ingest_status` | Polls a running ingest job |
+| `query_wiki` | Hybrid retrieval (vector + KG) + LLM answer with citations |
+| `list_wiki_pages` | Lists pages with optional path-prefix filter |
+| `get_wiki_page` | Full Markdown content of a single page |
+| `create_wiki_page` | Creates and commits a new wiki page |
+| `update_wiki_page` | Updates and commits an existing page |
+| `list_sources` | Lists all ingested sources in a workspace |
+| `trigger_lint` | Starts a lint run for drift/contradiction checks |
+| `search_tools` | Returns full schemas for tools matching a keyword |
+
+#### HTTP transport (remote agents)
+
+The same 13 tools are also available over Streamable HTTP at `POST /mcp`. Useful for cloud-hosted agents that cannot run a local subprocess:
+
+```bash
+# With auth — returns 13-tool manifest
+curl -X POST http://localhost:8000/mcp \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+
+# Without auth — returns 401
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
 
 ### 20.6 — Typical Claude Code Session: Developer Workflow
 
@@ -2448,21 +2494,17 @@ Create `.kiro/hooks/schema-version-reminder.json`:
 
 ### 21.3 — MCP Server Configuration
 
-Kiro supports MCP servers natively. Configure both the Context API and the project's PostgreSQL database as MCP servers so Kiro can query them directly.
+Kiro supports MCP servers natively via HTTP. The project provides two connection options — use the auth proxy for automatic token management (recommended for local development), or connect directly to the Streamable HTTP endpoint with your own bearer token.
 
-Create `.kiro/settings/mcp.json`:
+#### `.kiro/settings/mcp.json` (committed)
 
 ```json
 {
   "mcpServers": {
-    "context-api": {
+    "context-wiki": {
       "type": "http",
-      "url": "http://localhost:8000",
-      "description": "Context Wiki API — ingest, query, lint, wiki pages",
-      "headers": {
-        "Authorization": "Bearer ${CONTEXT_API_TOKEN}"
-      },
-      "openApiSpec": "http://localhost:8000/openapi.json"
+      "url": "http://localhost:8001/mcp",
+      "description": "Context Wiki — 13 purpose-built tools via auth proxy (token managed automatically)"
     },
     "postgres": {
       "command": "npx",
@@ -2476,21 +2518,60 @@ Create `.kiro/settings/mcp.json`:
 }
 ```
 
-Set environment variables (add to `.env` or shell profile):
-```bash
-CONTEXT_API_TOKEN=eyJ...      # your Bearer token
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/context
+The `context-wiki` entry routes through the auth proxy at `:8001`. The proxy automatically fetches and refreshes a bearer token from `/api/v1/status/bootstrap` — no credentials needed in the MCP config. Requests are forwarded to `http://localhost:8000/mcp` (the Streamable HTTP MCP transport).
+
+#### Direct connection (no proxy)
+
+If the auth proxy is not running, connect directly and supply a token:
+
+```json
+{
+  "mcpServers": {
+    "context-wiki": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp",
+      "description": "Context Wiki — direct connection, requires bearer token",
+      "headers": {
+        "Authorization": "Bearer ${CONTEXT_API_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
-With the `postgres` MCP server, Kiro can directly inspect the database:
+```bash
+export CONTEXT_API_TOKEN="eyJ..."   # add to ~/.zshrc or Kiro env settings
+```
+
+#### Prerequisites
+
+```bash
+# Full stack must be running — this starts api, workers, auth proxy, and portal
+make up
+
+# Verify proxy is healthy
+curl http://localhost:8001/health
+
+# Verify MCP endpoint responds (replace token)
+curl -X POST http://localhost:8000/mcp \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+#### Available tools
+
+Both Kiro and Claude Code get the same 13 tools — see the tool table in section 20.5.
+
+With the `postgres` MCP server, Kiro can also directly inspect the database:
 - "How many wiki pages does workspace X have?"
 - "Show me the most recent lint findings"
 - "What are the top 10 nodes in the knowledge graph?"
 
-With the `context-api` MCP server, Kiro can call the API as tools:
-- Trigger an ingest job
-- Run a lint pass
-- Query the wiki for context while writing code
+```bash
+# postgres MCP requires DATABASE_URL pointing to the host-exposed port
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/context
+```
 
 ### 21.4 — Spec-Driven Development for New Features
 
