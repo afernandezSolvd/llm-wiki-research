@@ -1,27 +1,21 @@
 #!/usr/bin/env bash
-# MCP server wrapper — auto-fetches a long-lived bootstrap token at startup.
-# Retries until the API is ready (handles race at docker compose start).
+# MCP server wrapper — waits for the auth proxy (confirms full stack is up),
+# then runs the purpose-built Python MCP server over stdio.
 
-API="http://localhost:8000/api/v1/status/bootstrap"
-TOKEN=""
-RETRIES=10
+PROXY="http://localhost:8001"
+RETRIES=20
 
 for i in $(seq 1 $RETRIES); do
-  TOKEN=$(curl -sf "$API" | jq -r '.access_token // empty')
-  if [ -n "$TOKEN" ]; then
+  if curl -sf "${PROXY}/health" > /dev/null 2>&1; then
     break
   fi
+  if [ "$i" = "$RETRIES" ]; then
+    echo "[mcp-context-wiki] ERROR: stack not ready after ${RETRIES} attempts" >&2
+    exit 1
+  fi
+  echo "[mcp-context-wiki] waiting for stack... (${i}/${RETRIES})"
   sleep 3
 done
 
-if [ -z "$TOKEN" ]; then
-  echo "[mcp-context-wiki] ERROR: could not fetch bootstrap token after ${RETRIES} attempts" >&2
-  exit 1
-fi
-
-exec npx -y @ivotoby/openapi-mcp-server \
-  --openapi-spec "http://localhost:8000/openapi.json" \
-  --api-base-url "http://localhost:8000" \
-  --headers "Authorization:Bearer $TOKEN" \
-  --name "context-wiki" \
-  --transport stdio
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec docker compose -f "${REPO_ROOT}/docker-compose.yml" exec -T api python -m app.mcp.server

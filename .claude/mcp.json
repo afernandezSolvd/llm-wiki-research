@@ -1,16 +1,8 @@
 {
   "mcpServers": {
     "context-wiki": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@ivotoby/openapi-mcp-server",
-        "--openapi-spec", "http://localhost:8000/openapi.json",
-        "--api-base-url", "http://localhost:8000",
-        "--headers", "Authorization:Bearer ${CONTEXT_API_TOKEN}",
-        "--name", "context-wiki",
-        "--transport", "stdio"
-      ],
+      "command": "python",
+      "args": ["-m", "app.mcp.server"],
       "description": "Context Wiki API — ingest, query, lint, wiki pages, knowledge graph"
     }
   }

@@ -54,6 +54,8 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
 - Python 3.12, FastAPI, SQLAlchemy 2.0 async (backend)
 - Node.js 20, TypeScript, Vite, React (portal frontend — `portal/`)
 - PostgreSQL 16 + pgvector, Redis 7 (data layer)
+- Python 3.12 + FastAPI `>=0.111.0`, `mcp>=1.25,<2` (FastMCP included), SQLAlchemy 2.0 async (existing) (003-improve-mcp-server)
+- PostgreSQL 16 + pgvector (existing, no schema changes) (003-improve-mcp-server)
 
 ## Recent Changes
 - Added read-only portal (`portal/`) — Vite + React SPA at port 3000

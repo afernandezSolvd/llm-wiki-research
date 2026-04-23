@@ -87,6 +87,17 @@ services:
     depends_on:
       - redis
 
+  mcp-auth-proxy:
+    build: .
+    command: python3 tools/mcp_auth_proxy.py
+    ports:
+      - "8001:8001"
+    environment:
+      UPSTREAM_URL: http://api:8000
+      PROXY_PORT: "8001"
+    depends_on:
+      - api
+
   portal:
     build: portal
     ports:
