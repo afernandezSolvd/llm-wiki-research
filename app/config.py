@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # Public read-only portal API
     public_api_enabled: bool = True
 
+    # Wiki git remote sync (Obsidian)
+    wiki_git_enabled: bool = False
+    wiki_git_provider: str = "github"
+    wiki_git_provider_token: str = ""
+    wiki_git_org: str = ""
+    wiki_git_base_url: str = ""
+
     # App
     environment: str = "development"
     log_level: str = "INFO"

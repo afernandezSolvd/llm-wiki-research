@@ -21,8 +21,8 @@
 
 **Purpose**: Add new config settings and create the `app/git/providers/` package skeleton.
 
-- [ ] T001 Add 5 new `WIKI_GIT_*` settings to `app/config.py`: `wiki_git_enabled` (bool, default `False`), `wiki_git_provider` (str, default `"github"`), `wiki_git_provider_token` (str, default `""`), `wiki_git_org` (str, default `""`), `wiki_git_base_url` (str, default `""` for GitLab self-hosted)
-- [ ] T002 Create `app/git/providers/__init__.py` — define abstract `GitProvider` base class with `create_repo(org: str, repo_name: str) -> str` and `get_push_url(remote_url: str) -> str` abstract methods; implement `get_provider(settings) -> GitProvider` factory that returns `GitHubProvider` or `GitLabProvider` based on `settings.wiki_git_provider`
+- [X] T001 Add 5 new `WIKI_GIT_*` settings to `app/config.py`: `wiki_git_enabled` (bool, default `False`), `wiki_git_provider` (str, default `"github"`), `wiki_git_provider_token` (str, default `""`), `wiki_git_org` (str, default `""`), `wiki_git_base_url` (str, default `""` for GitLab self-hosted)
+- [X] T00 Create `app/git/providers/__init__.py` — define abstract `GitProvider` base class with `create_repo(org: str, repo_name: str) -> str` and `get_push_url(remote_url: str) -> str` abstract methods; implement `get_provider(settings) -> GitProvider` factory that returns `GitHubProvider` or `GitLabProvider` based on `settings.wiki_git_provider`
 
 ---
 
@@ -32,8 +32,8 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Add three nullable columns to `Workspace` model in `app/models/workspace.py`: `git_remote_url = Column(Text, nullable=True)`, `git_last_push_at = Column(DateTime(timezone=True), nullable=True)`, `git_last_push_error = Column(Text, nullable=True)`
-- [ ] T004 Create Alembic migration in `alembic/versions/` — `add_column workspaces.git_remote_url (Text nullable)`, `workspaces.git_last_push_at (DateTime tz nullable)`, `workspaces.git_last_push_error (Text nullable)`; `downgrade()` MUST drop all three columns symmetrically
+- [X] T00 Add three nullable columns to `Workspace` model in `app/models/workspace.py`: `git_remote_url = Column(Text, nullable=True)`, `git_last_push_at = Column(DateTime(timezone=True), nullable=True)`, `git_last_push_error = Column(Text, nullable=True)`
+- [X] T00 Create Alembic migration in `alembic/versions/` — `add_column workspaces.git_remote_url (Text nullable)`, `workspaces.git_last_push_at (DateTime tz nullable)`, `workspaces.git_last_push_error (Text nullable)`; `downgrade()` MUST drop all three columns symmetrically
 
 **Checkpoint**: `make migrate` succeeds; `from app.models.workspace import Workspace` imports cleanly with the three new fields.
 
@@ -47,15 +47,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T005 [P] [US1] Add `set_remote(remote_url: str) -> None` and `push_to_remote(token: str) -> str` methods to `RepoManager` in `app/git/repo_manager.py` — `set_remote` calls `repo.create_remote("origin", url)` if no remote exists (idempotent); `push_to_remote` builds `https://{token}@{host}/{path}.git` auth URL in memory, calls `repo.remotes.origin.push()`, returns pushed commit SHA; raises `GitError` on push failure
-- [ ] T006 [P] [US1] Create `app/git/providers/github.py` — implement `GitHubProvider(GitProvider)`: `get_push_url(remote_url, token) -> str` builds `https://{token}@github.com/{org}/{repo}.git`; stub `create_repo()` raises `NotImplementedError` (implemented in US3)
-- [ ] T007 [P] [US1] Create `app/git/providers/gitlab.py` — implement `GitLabProvider(GitProvider)`: `get_push_url(remote_url, token) -> str` builds auth URL using `WIKI_GIT_BASE_URL` (defaults to `https://gitlab.com`); stub `create_repo()` raises `NotImplementedError`
-- [ ] T008 [US1] Create `app/workers/git_push_worker.py` — `push_to_remote` Celery task: sync `def push_to_remote(self, workspace_id: str)`; acquire Redis lock `git_push_lock:{workspace_id}` via `SET NX PX 120000`; if lock unavailable retry with `self.retry(countdown=10, max_retries=6)`; inside `_push_async`: load workspace, call `repo.push_to_remote(token)`, update `workspace.git_last_push_at = now()` and clear `workspace.git_last_push_error` on success, set `workspace.git_last_push_error = str(exc)` on failure; emit `git_push_start`, `git_push_success`, `git_push_error` structured log events; release Redis lock in `finally` block; task name `"app.workers.git_push_worker.push_to_remote"`; skip all work silently when `settings.wiki_git_enabled` is `False` or `workspace.git_remote_url` is `None`
-- [ ] T009 [US1] Add `git_push` to the Celery worker queues in `docker-compose.yml` — append `,git_push` to the worker's `CELERY_QUEUES` env var (or `-Q` arg); set `route` for `app.workers.git_push_worker.push_to_remote` → `git_push` in `app/workers/celery_app.py` (or equivalent task routing config)
-- [ ] T010 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/workers/ingest_worker.py` — call inside `_process_ingest_job_async` after each successful `repo.write_file()` call that produces a new commit SHA; guard with `if settings.wiki_git_enabled`
-- [ ] T011 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/api/v1/wiki.py` — add after successful `repo.write_file()` in `create_page` and `update_page` handlers, and after `repo.delete_file()` in `delete_page` handler; guard with `if settings.wiki_git_enabled`
-- [ ] T012 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/mcp/tools/wiki.py` — add after `repo.write_file()` in `create_wiki_page` and `update_wiki_page` tool handlers; guard with `if settings.wiki_git_enabled`
-- [ ] T013 [US1] Create `tests/unit/test_git_push_worker.py` — unit tests (no DB, no real Redis): mock `RepoManager.push_to_remote`, mock Redis `SET NX`, mock `AsyncSessionLocal`; test: push succeeds → `git_last_push_at` set and `git_last_push_error` cleared; push fails → `git_last_push_error` set, task does NOT raise; lock unavailable → task retries; `WIKI_GIT_ENABLED=False` → push skipped with no error; `git_remote_url` is None → push skipped
+- [X] T00 [P] [US1] Add `set_remote(remote_url: str) -> None` and `push_to_remote(token: str) -> str` methods to `RepoManager` in `app/git/repo_manager.py` — `set_remote` calls `repo.create_remote("origin", url)` if no remote exists (idempotent); `push_to_remote` builds `https://{token}@{host}/{path}.git` auth URL in memory, calls `repo.remotes.origin.push()`, returns pushed commit SHA; raises `GitError` on push failure
+- [X] T00 [P] [US1] Create `app/git/providers/github.py` — implement `GitHubProvider(GitProvider)`: `get_push_url(remote_url, token) -> str` builds `https://{token}@github.com/{org}/{repo}.git`; stub `create_repo()` raises `NotImplementedError` (implemented in US3)
+- [X] T00 [P] [US1] Create `app/git/providers/gitlab.py` — implement `GitLabProvider(GitProvider)`: `get_push_url(remote_url, token) -> str` builds auth URL using `WIKI_GIT_BASE_URL` (defaults to `https://gitlab.com`); stub `create_repo()` raises `NotImplementedError`
+- [X] T00 [US1] Create `app/workers/git_push_worker.py` — `push_to_remote` Celery task: sync `def push_to_remote(self, workspace_id: str)`; acquire Redis lock `git_push_lock:{workspace_id}` via `SET NX PX 120000`; if lock unavailable retry with `self.retry(countdown=10, max_retries=6)`; inside `_push_async`: load workspace, call `repo.push_to_remote(token)`, update `workspace.git_last_push_at = now()` and clear `workspace.git_last_push_error` on success, set `workspace.git_last_push_error = str(exc)` on failure; emit `git_push_start`, `git_push_success`, `git_push_error` structured log events; release Redis lock in `finally` block; task name `"app.workers.git_push_worker.push_to_remote"`; skip all work silently when `settings.wiki_git_enabled` is `False` or `workspace.git_remote_url` is `None`
+- [X] T00 [US1] Add `git_push` to the Celery worker queues in `docker-compose.yml` — append `,git_push` to the worker's `CELERY_QUEUES` env var (or `-Q` arg); set `route` for `app.workers.git_push_worker.push_to_remote` → `git_push` in `app/workers/celery_app.py` (or equivalent task routing config)
+- [X] T01 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/workers/ingest_worker.py` — call inside `_process_ingest_job_async` after each successful `repo.write_file()` call that produces a new commit SHA; guard with `if settings.wiki_git_enabled`
+- [X] T01 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/api/v1/wiki.py` — add after successful `repo.write_file()` in `create_page` and `update_page` handlers, and after `repo.delete_file()` in `delete_page` handler; guard with `if settings.wiki_git_enabled`
+- [X] T01 [P] [US1] Wire `push_to_remote.apply_async(args=[str(workspace_id)], queue="git_push")` in `app/mcp/tools/wiki.py` — add after `repo.write_file()` in `create_wiki_page` and `update_wiki_page` tool handlers; guard with `if settings.wiki_git_enabled`
+- [X] T01 [US1] Create `tests/unit/test_git_push_worker.py` — unit tests (no DB, no real Redis): mock `RepoManager.push_to_remote`, mock Redis `SET NX`, mock `AsyncSessionLocal`; test: push succeeds → `git_last_push_at` set and `git_last_push_error` cleared; push fails → `git_last_push_error` set, task does NOT raise; lock unavailable → task retries; `WIKI_GIT_ENABLED=False` → push skipped with no error; `git_remote_url` is None → push skipped
 
 **Checkpoint**: `WIKI_GIT_ENABLED=true` + ingest job → `git_push_success` in worker logs → remote has new commit.
 
@@ -69,7 +69,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Add `WorkspaceCloneUrlResponse` Pydantic response model and `GET /{workspace_id}/clone-url` endpoint to `app/api/v1/workspaces.py` — require `reader` role minimum via `require_role`; return 409 with descriptive `detail` if `workspace.git_remote_url` is `None`; response body matches contract in `specs/004-obsidian-git-sync/contracts/clone-url.md`: `clone_url`, `workspace_slug`, `last_push_at`, `setup` (with `clone_command`, `obsidian_note`, `plugin_url`)
+- [X] T01 [US2] Add `WorkspaceCloneUrlResponse` Pydantic response model and `GET /{workspace_id}/clone-url` endpoint to `app/api/v1/workspaces.py` — require `reader` role minimum via `require_role`; return 409 with descriptive `detail` if `workspace.git_remote_url` is `None`; response body matches contract in `specs/004-obsidian-git-sync/contracts/clone-url.md`: `clone_url`, `workspace_slug`, `last_push_at`, `setup` (with `clone_command`, `obsidian_note`, `plugin_url`)
 
 **Checkpoint**: `GET /clone-url` returns 200 for members, 403 for non-members, 409 when no remote configured.
 
@@ -83,9 +83,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T015 [P] [US3] Implement `GitHubProvider.create_repo(org: str, repo_name: str) -> str` in `app/git/providers/github.py` — call `POST /orgs/{org}/repos` via `urllib.request` with `Authorization: Bearer {token}` header; body `{"name": repo_name, "private": true, "auto_init": false}`; return `clone_url` from response; idempotent: if response is 422 (already exists), call `GET /repos/{org}/{repo_name}` and return its `clone_url`; `repo_name` convention: `wiki-{workspace.slug}`
-- [ ] T016 [P] [US3] Implement `GitLabProvider.create_repo(org: str, repo_name: str) -> str` in `app/git/providers/gitlab.py` — call `POST {base_url}/api/v4/projects` with `PRIVATE-TOKEN: {token}` header; body `{"name": repo_name, "namespace_id": {group_id}, "visibility": "private"}`; idempotent on 409; return `http_url_to_repo`; `WIKI_GIT_BASE_URL` defaults to `https://gitlab.com`
-- [ ] T017 [US3] Wire auto-provision in workspace create handler in `app/api/v1/workspaces.py` — after `repo.init()`, if `settings.wiki_git_enabled`: call `get_provider(settings).create_repo(settings.wiki_git_org, f"wiki-{ws.slug}")` in a `try/except`; on success call `repo.set_remote(clone_url)` and set `ws.git_remote_url = clone_url`; on failure log `git_remote_provision_error` warning and continue (workspace creation is NOT rolled back)
+- [X] T01 [P] [US3] Implement `GitHubProvider.create_repo(org: str, repo_name: str) -> str` in `app/git/providers/github.py` — call `POST /orgs/{org}/repos` via `urllib.request` with `Authorization: Bearer {token}` header; body `{"name": repo_name, "private": true, "auto_init": false}`; return `clone_url` from response; idempotent: if response is 422 (already exists), call `GET /repos/{org}/{repo_name}` and return its `clone_url`; `repo_name` convention: `wiki-{workspace.slug}`
+- [X] T01 [P] [US3] Implement `GitLabProvider.create_repo(org: str, repo_name: str) -> str` in `app/git/providers/gitlab.py` — call `POST {base_url}/api/v4/projects` with `PRIVATE-TOKEN: {token}` header; body `{"name": repo_name, "namespace_id": {group_id}, "visibility": "private"}`; idempotent on 409; return `http_url_to_repo`; `WIKI_GIT_BASE_URL` defaults to `https://gitlab.com`
+- [X] T01 [US3] Wire auto-provision in workspace create handler in `app/api/v1/workspaces.py` — after `repo.init()`, if `settings.wiki_git_enabled`: call `get_provider(settings).create_repo(settings.wiki_git_org, f"wiki-{ws.slug}")` in a `try/except`; on success call `repo.set_remote(clone_url)` and set `ws.git_remote_url = clone_url`; on failure log `git_remote_provision_error` warning and continue (workspace creation is NOT rolled back)
 
 **Checkpoint**: `POST /workspaces` with `WIKI_GIT_ENABLED=true` → remote repo appears in GitHub/GitLab → `GET /clone-url` returns the URL.
 
@@ -95,9 +95,9 @@
 
 **Purpose**: Lint, type safety, docs.
 
-- [ ] T018 [P] Run `make lint` (ruff + mypy) across `app/git/providers/`, `app/workers/git_push_worker.py`, and all modified files; fix any type errors or style violations; ensure all public functions have type annotations
-- [ ] T019 [P] Update `README.md` — add a "Git Remote Sync (Obsidian)" subsection under the Operations chapter documenting the 5 env vars, the `GET /clone-url` endpoint, and the Obsidian Git plugin setup steps (mirror `specs/004-obsidian-git-sync/quickstart.md`)
-- [ ] T020 Update `CLAUDE.md` Recent Changes section to document the git remote sync feature and new `app/git/providers/` package
+- [X] T01 [P] Run `make lint` (ruff + mypy) across `app/git/providers/`, `app/workers/git_push_worker.py`, and all modified files; fix any type errors or style violations; ensure all public functions have type annotations
+- [X] T01 [P] Update `README.md` — add a "Git Remote Sync (Obsidian)" subsection under the Operations chapter documenting the 5 env vars, the `GET /clone-url` endpoint, and the Obsidian Git plugin setup steps (mirror `specs/004-obsidian-git-sync/quickstart.md`)
+- [X] T020 Update `CLAUDE.md` Recent Changes section to document the git remote sync feature and new `app/git/providers/` package
 
 ---
 

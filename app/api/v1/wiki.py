@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.rbac import Role, require_role
+from app.config import get_settings
 from app.core.db import get_db
 from app.core.exceptions import NotFoundError
 from app.dependencies import get_current_user
@@ -85,6 +86,10 @@ async def create_page(
 
     repo = RepoManager(workspace_id)
     sha = repo.write_file(body.page_path, body.content, f"manual create by {current_user.email}")
+
+    if get_settings().wiki_git_enabled:
+        from app.workers.git_push_worker import push_to_remote as _git_push
+        _git_push.apply_async(args=[str(workspace_id)], queue="git_push")
 
     embed_svc = get_embedding_service()
     embedding = await embed_svc.embed_single(body.content)
@@ -163,6 +168,11 @@ async def update_page(
     repo = RepoManager(workspace_id)
     old_content = repo.read_file(page_path) or ""
     sha = repo.write_file(page_path, body.content, f"manual edit by {current_user.email}")
+
+    if get_settings().wiki_git_enabled:
+        from app.workers.git_push_worker import push_to_remote as _git_push
+        _git_push.apply_async(args=[str(workspace_id)], queue="git_push")
+
     diff = repo.compute_diff(old_content, body.content, page_path)
 
     embed_svc = get_embedding_service()
@@ -270,6 +280,11 @@ async def delete_page(
 
     repo = RepoManager(workspace_id)
     repo.delete_file(page_path, f"delete by {current_user.email}")
+
+    if get_settings().wiki_git_enabled:
+        from app.workers.git_push_worker import push_to_remote as _git_push
+        _git_push.apply_async(args=[str(workspace_id)], queue="git_push")
+
     await db.delete(page)
     await db.commit()
 

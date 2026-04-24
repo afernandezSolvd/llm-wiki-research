@@ -293,6 +293,10 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
                 commit_msg = f"ingest:{source_id} — {edit.change_summary[:80]}"
                 sha = repo.write_file(edit.page_path, edit.content, commit_msg)
 
+                if settings.wiki_git_enabled:
+                    from app.workers.git_push_worker import push_to_remote as _git_push
+                    _git_push.apply_async(args=[str(workspace_id)], queue="git_push")
+
                 diff = repo.compute_diff(old_content, edit.content, edit.page_path)
                 new_embedding = await embed_svc.embed_single(edit.content)
 

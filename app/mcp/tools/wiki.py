@@ -138,6 +138,11 @@ async def create_wiki_page(workspace_id: str, page_path: str, title: str, conten
             repo = RepoManager(ws_uuid)
             sha = repo.write_file(page_path, content, f"mcp create: {page_path}")
 
+            from app.config import get_settings
+            if get_settings().wiki_git_enabled:
+                from app.workers.git_push_worker import push_to_remote as _git_push
+                _git_push.apply_async(args=[str(ws_uuid)], queue="git_push")
+
             embed_svc = get_embedding_service()
             embedding = await embed_svc.embed_single(content)
 
@@ -203,6 +208,11 @@ async def update_wiki_page(workspace_id: str, page_path: str, content: str) -> s
 
             repo = RepoManager(ws_uuid)
             sha = repo.write_file(page_path, content, f"mcp update: {page_path}")
+
+            from app.config import get_settings
+            if get_settings().wiki_git_enabled:
+                from app.workers.git_push_worker import push_to_remote as _git_push
+                _git_push.apply_async(args=[str(ws_uuid)], queue="git_push")
 
             embed_svc = get_embedding_service()
             new_embedding = await embed_svc.embed_single(content)

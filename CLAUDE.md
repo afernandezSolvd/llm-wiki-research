@@ -8,7 +8,7 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
 ## Stack
 - FastAPI + SQLAlchemy 2.0 async (Python 3.12)
 - PostgreSQL 16 + pgvector (HNSW indexes, 1024-dim Voyage embeddings)
-- Celery 5 with Redis broker — queues: ingest, lint, embedding, graph
+- Celery 5 with Redis broker — queues: ingest, lint, embedding, graph, git_push
 - Anthropic API (claude-opus-4-6 for ingest/lint, haiku-4-5 for gate)
 - Voyage AI (voyage-3-large) for embeddings — separate key from Anthropic
 - Git (gitpython) — one repo per workspace under ./wiki_repos/
@@ -63,3 +63,4 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
 - Added read-only portal (`portal/`) — Vite + React SPA at port 3000
 - Added public API router (`app/api/v1/public.py`) — 6 unauthenticated endpoints under `/api/v1/public/`, guarded by `PUBLIC_API_ENABLED` env var
 - Added status dashboard — HTML/ES2022 frontend showing ingest queue health
+- Added git remote sync (`app/git/providers/`, `app/workers/git_push_worker.py`) — pushes each workspace's wiki repo to GitHub/GitLab after every write; controlled by `WIKI_GIT_ENABLED`; `GET /api/v1/workspaces/{id}/clone-url` endpoint returns clone URL and Obsidian setup instructions

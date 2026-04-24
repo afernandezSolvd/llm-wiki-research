@@ -1375,6 +1375,44 @@ curl "http://localhost:8000/api/v1/admin/cost-report?workspace_id=$WS_ID" \
 
 All mutating API calls (`POST`, `PUT`, `PATCH`, `DELETE`) are logged to the `audit_logs` table with the user ID, resource affected, old and new values, and IP address. Access audit logs directly via SQL for compliance reporting.
 
+### Git Remote Sync (Obsidian)
+
+Push every wiki commit to a remote GitHub or GitLab repository so developers can clone the wiki and view it in Obsidian.
+
+**Configure env vars** (add to `.env` or Kubernetes Secret):
+
+```bash
+WIKI_GIT_ENABLED=true
+WIKI_GIT_PROVIDER=github          # or "gitlab"
+WIKI_GIT_PROVIDER_TOKEN=ghp_...   # fine-grained PAT with repo scope
+WIKI_GIT_ORG=your-org             # GitHub org or GitLab namespace
+# WIKI_GIT_BASE_URL=              # only for self-hosted GitLab
+```
+
+**How it works**: After every wiki write (ingest, API edit, MCP tool call), a `git_push` Celery task is enqueued. The task acquires a per-workspace Redis lock and pushes to the remote using the token-embedded HTTPS URL. Push failures are logged but never block the wiki operation.
+
+**Get the clone URL for a workspace**:
+
+```bash
+curl http://your-host/api/v1/workspaces/$WS_ID/clone-url \
+  -H "Authorization: Bearer $TOKEN"
+# → {"clone_url": "https://github.com/your-org/wiki-team.git", ...}
+
+git clone https://github.com/your-org/wiki-team.git ~/wiki-team
+# Open ~/wiki-team as an Obsidian vault
+```
+
+**Set up auto-pull in Obsidian**: Install the "Obsidian Git" community plugin → set Pull interval to `1` minute → enable "Pull on startup". Pages appear in Obsidian within ~90 seconds of an ingest.
+
+**Verify push is working**:
+
+```bash
+kubectl logs -f deployment/context-worker | grep git_push
+# {"event": "git_push_success", "workspace_id": "...", "sha": "..."}
+```
+
+Push log events: `git_push_start`, `git_push_success`, `git_push_error`.
+
 ---
 
 ## 17. Scaling Guide
