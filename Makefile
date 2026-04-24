@@ -1,16 +1,13 @@
 .PHONY: up down migrate revision shell test lint
 
 up:
-	docker compose up -d db redis
-	sleep 2
-	$(MAKE) migrate
-	docker compose up -d api worker beat flower
+	docker compose up -d
 
 down:
 	docker compose down
 
 migrate:
-	alembic upgrade head
+	docker compose run --rm migrate
 
 revision:
 	alembic revision --autogenerate -m "$(msg)"
