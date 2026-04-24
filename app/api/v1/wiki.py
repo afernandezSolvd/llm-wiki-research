@@ -199,6 +199,7 @@ async def update_page(
         created_at=datetime.now(UTC).isoformat(),
     ))
     await db.commit()
+    await db.refresh(page)
     return WikiPageDetail(**page.__dict__, content=body.content)
 
 

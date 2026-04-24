@@ -91,9 +91,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 self.send_response(resp.status)
+                seen: set[str] = set()
                 for key, val in resp.headers.items():
-                    if key.lower() == "transfer-encoding":
+                    low = key.lower()
+                    if low in ("transfer-encoding",) or low in seen:
                         continue
+                    seen.add(low)
                     self.send_header(key, val)
                 self.end_headers()
                 # Stream in chunks — required for SSE query responses
@@ -112,9 +115,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
             else:
                 error_body = exc.read()
                 self.send_response(exc.code)
+                seen_err: set[str] = set()
                 for key, val in exc.headers.items():
-                    if key.lower() == "transfer-encoding":
+                    low = key.lower()
+                    if low in ("transfer-encoding", "content-length") or low in seen_err:
                         continue
+                    seen_err.add(low)
                     self.send_header(key, val)
                 self.send_header("Content-Length", str(len(error_body)))
                 self.end_headers()
