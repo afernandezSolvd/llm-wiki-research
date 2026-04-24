@@ -43,8 +43,9 @@ def test_make_snippet_appends_ellipsis_when_truncated():
 
 
 def test_public_api_disabled_guard(monkeypatch):
-    """When PUBLIC_API_ENABLED=false the guard raises a JSONResponse (503)."""
-    from fastapi.responses import JSONResponse
+    """When PUBLIC_API_ENABLED=false the guard raises HTTPException(503)."""
+    import pytest
+    from fastapi import HTTPException
 
     from app.api.v1.public import _guard
     from app.config import Settings
@@ -53,15 +54,9 @@ def test_public_api_disabled_guard(monkeypatch):
         "app.api.v1.public.get_settings",
         lambda: Settings(public_api_enabled=False),
     )
-    try:
+    with pytest.raises(HTTPException) as exc_info:
         _guard()
-        assert False, "Expected an exception"
-    except JSONResponse as resp:
-        assert resp.status_code == 503
-    except Exception as exc:
-        # _guard raises the JSONResponse directly (raise JSONResponse(…))
-        # FastAPI catches it; in unit tests it propagates as-is
-        assert hasattr(exc, "status_code") and exc.status_code == 503
+    assert exc_info.value.status_code == 503
 
 
 def test_public_api_enabled_guard_passes(monkeypatch):

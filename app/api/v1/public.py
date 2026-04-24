@@ -6,7 +6,7 @@ This router should only be reachable on a trusted internal network.
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -24,16 +24,9 @@ from app.models.workspace import Workspace
 logger = get_logger(__name__)
 router = APIRouter(prefix="/public", tags=["public"])
 
-_DISABLED = JSONResponse(
-    status_code=503,
-    content={"detail": "Public portal API is disabled"},
-)
-
-
 def _guard() -> None:
-    settings = get_settings()
-    if not settings.public_api_enabled:
-        raise _DISABLED  # type: ignore[raise]
+    if not get_settings().public_api_enabled:
+        raise HTTPException(status_code=503, detail="Public portal API is disabled")
 
 
 # ---------------------------------------------------------------------------
