@@ -17,6 +17,10 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
     settings: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     deleted_at: Mapped[None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    git_remote_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    git_last_push_at: Mapped[None] = mapped_column(DateTime(timezone=True), nullable=True)
+    git_last_push_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     memberships: Mapped[list["UserWorkspaceMembership"]] = relationship(  # type: ignore[name-defined]
         back_populates="workspace", cascade="all, delete-orphan"
     )

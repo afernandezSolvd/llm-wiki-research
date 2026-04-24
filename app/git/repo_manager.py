@@ -172,6 +172,35 @@ class RepoManager:
         )
         return "".join(diff)
 
+    def set_remote(self, remote_url: str) -> None:
+        """Add or update origin remote. Idempotent."""
+        repo = self._repo()
+        if "origin" in [r.name for r in repo.remotes]:
+            repo.remotes.origin.set_url(remote_url)
+        else:
+            repo.create_remote("origin", remote_url)
+
+    def push_to_remote(self, token: str) -> str:
+        """Push HEAD to origin using token-embedded auth URL. Returns pushed commit SHA."""
+        from app.git.providers import get_provider
+
+        repo = self._repo()
+        if "origin" not in [r.name for r in repo.remotes]:
+            raise GitError(f"No remote configured for workspace {self.workspace_id}")
+
+        remote_url = repo.remotes.origin.url
+        push_url = get_provider(settings).get_push_url(remote_url, token)
+
+        try:
+            repo.remotes.origin.set_url(push_url)
+            info = repo.remotes.origin.push()
+            if info and info[0].flags & git.remote.PushInfo.ERROR:
+                raise GitError(f"Push failed: {info[0].summary}")
+        finally:
+            repo.remotes.origin.set_url(remote_url)
+
+        return repo.head.commit.hexsha
+
     def list_pages(self) -> list[str]:
         """List all markdown files relative to repo root."""
         result = []

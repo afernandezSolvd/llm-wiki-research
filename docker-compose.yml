@@ -47,7 +47,7 @@ services:
 
   worker:
     build: .
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q ingest,lint,embedding,graph,default
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4 -Q ingest,lint,embedding,graph,git_push,default
     volumes:
       - .:/app
       - wiki_repos:/app/wiki_repos

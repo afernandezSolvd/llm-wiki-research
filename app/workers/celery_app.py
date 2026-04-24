@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.workers.lint_worker",
         "app.workers.embedding_worker",
         "app.workers.graph_worker",
+        "app.workers.git_push_worker",
     ],
 )
 
@@ -28,6 +29,7 @@ celery_app.conf.update(
         "app.workers.lint_worker.*": {"queue": "lint"},
         "app.workers.embedding_worker.*": {"queue": "embedding"},
         "app.workers.graph_worker.*": {"queue": "graph"},
+        "app.workers.git_push_worker.*": {"queue": "git_push"},
     },
     beat_schedule={
         # Rebuild hot-pages cache every 15 minutes
