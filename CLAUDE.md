@@ -56,6 +56,8 @@ and PostgreSQL. Claude (claude-opus-4-6) does the actual writing.
 - PostgreSQL 16 + pgvector, Redis 7 (data layer)
 - Python 3.12 + FastAPI `>=0.111.0`, `mcp>=1.25,<2` (FastMCP included), SQLAlchemy 2.0 async (existing) (003-improve-mcp-server)
 - PostgreSQL 16 + pgvector (existing, no schema changes) (003-improve-mcp-server)
+- Python 3.12 (existing) + gitpython (existing), httpx or urllib.request for provider API calls (no new SDK), redis-py (existing, for push serialization lock) (004-obsidian-git-sync)
+- PostgreSQL 16 — three new nullable columns on `workspaces` table; Redis — distributed lock key per workspace (004-obsidian-git-sync)
 
 ## Recent Changes
 - Added read-only portal (`portal/`) — Vite + React SPA at port 3000
