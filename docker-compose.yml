@@ -25,6 +25,18 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build: .
+    command: alembic upgrade head
+    volumes:
+      - .:/app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://llmwiki:llmwiki@db:5432/llmwiki
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -44,6 +56,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build: .
@@ -62,6 +76,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   beat:
     build: .
