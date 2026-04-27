@@ -173,8 +173,9 @@ async def _run_lint_pass_async(run_id: uuid.UUID):
         schema_block = await get_schema_block(redis, workspace_id, schema_content)
 
         # Build candidate pairs: pages in the same KG community
-        page_pairs: list[tuple[WikiPage, WikiPage]] = []
+        page_pairs: list[tuple[WikiPage, WikiPage, str]] = []  # (a, b, pair_source)
         community_to_pages: dict[str, list[WikiPage]] = {}
+        pages_with_kg: set[uuid.UUID] = set()
         for page in pages:
             node_result = await db.execute(
                 select(KGNode).where(
@@ -186,13 +187,57 @@ async def _run_lint_pass_async(run_id: uuid.UUID):
             if node and node.community_id:
                 cid = str(node.community_id)
                 community_to_pages.setdefault(cid, []).append(page)
+                pages_with_kg.add(page.id)
 
         for community_pages in community_to_pages.values():
             for i in range(len(community_pages)):
                 for j in range(i + 1, min(i + 4, len(community_pages))):  # cap pairs per community
-                    page_pairs.append((community_pages[i], community_pages[j]))
+                    page_pairs.append((community_pages[i], community_pages[j], "kg_community"))
 
-        for page_a, page_b in page_pairs[:50]:  # cap total LLM calls
+        # Embedding-similarity pairs for pages outside KG communities
+        kg_pairs_count = len(page_pairs)
+        covered_pairs: set[frozenset[uuid.UUID]] = {
+            frozenset({a.id, b.id}) for a, b, _ in page_pairs
+        }
+        embedding_pairs_count = 0
+        from sqlalchemy import text as sa_text
+        for page in pages:
+            if page.id in pages_with_kg or page.embedding is None:
+                continue
+            if embedding_pairs_count >= 30:
+                break
+            vec_str = "[" + ",".join(str(x) for x in page.embedding) + "]"
+            neighbors_result = await db.execute(
+                sa_text(
+                    "SELECT id FROM wiki_pages "
+                    "WHERE workspace_id = :ws AND id != :pid AND embedding IS NOT NULL "
+                    "ORDER BY embedding <=> cast(:ref_embedding as vector) LIMIT 3"
+                ),
+                {"ws": workspace_id, "pid": page.id, "ref_embedding": vec_str},
+            )
+            for (neighbor_id,) in neighbors_result:
+                pair_key = frozenset({page.id, neighbor_id})
+                if pair_key in covered_pairs:
+                    continue
+                neighbor_page = await db.get(WikiPage, neighbor_id)
+                if neighbor_page and embedding_pairs_count < 30:
+                    page_pairs.append((page, neighbor_page, "embedding_similarity"))
+                    covered_pairs.add(pair_key)
+                    embedding_pairs_count += 1
+
+        logger.info(
+            "lint_phase3_pairs_built",
+            community_pairs=kg_pairs_count,
+            embedding_pairs=embedding_pairs_count,
+            total_pairs=len(page_pairs),
+        )
+
+        # Prioritize KG community pairs first (up to 70), then embedding pairs (up to 30)
+        kg_slice = [p for p in page_pairs if p[2] == "kg_community"][:70]
+        emb_slice = [p for p in page_pairs if p[2] == "embedding_similarity"][:30]
+        pairs_to_check = kg_slice + emb_slice
+
+        for page_a, page_b, pair_source in pairs_to_check[:100]:  # cap total LLM calls
             content_a = repo.read_file(page_a.page_path) or ""
             content_b = repo.read_file(page_b.page_path) or ""
             if not content_a or not content_b:
@@ -229,6 +274,13 @@ async def _run_lint_pass_async(run_id: uuid.UUID):
                     severity=f.severity,
                     description=f.description,
                     evidence={
+                        "conflicting_pages": [
+                            {"path": page_a.page_path, "excerpt": f.page_a_excerpt},
+                            {"path": page_b.page_path, "excerpt": f.page_b_excerpt},
+                        ],
+                        "topic": f.topic,
+                        "pair_source": pair_source,
+                        # backward compat keys
                         "page_a": page_a.page_path,
                         "page_b": page_b.page_path,
                         "page_a_excerpt": f.page_a_excerpt,
