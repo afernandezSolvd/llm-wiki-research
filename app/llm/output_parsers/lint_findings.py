@@ -11,6 +11,7 @@ class LLMLintFinding:
     description: str
     page_a_excerpt: str = ""
     page_b_excerpt: str = ""
+    topic: str = ""
 
 
 def parse_lint_response(text: str) -> list[LLMLintFinding]:
@@ -31,11 +32,12 @@ def parse_lint_response(text: str) -> list[LLMLintFinding]:
             continue
         findings.append(
             LLMLintFinding(
-                finding_type=item.get("type", "contradiction"),
+                finding_type=item.get("type", "consistency"),
                 severity=item.get("severity", "warning"),
                 description=item.get("description", ""),
                 page_a_excerpt=item.get("page_a_excerpt", ""),
                 page_b_excerpt=item.get("page_b_excerpt", ""),
+                topic=item.get("topic", ""),
             )
         )
     return findings

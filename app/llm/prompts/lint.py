@@ -7,9 +7,10 @@ between them. Be precise: cite exact sentences that conflict.
 Output a JSON array of findings (empty array if no contradictions):
 [
   {
-    "type": "contradiction",
+    "type": "consistency",
     "severity": "error" | "warning",
     "description": "concise description of the contradiction",
+    "topic": "short label for the entity or claim being contradicted, e.g. 'Redis port'",
     "page_a_excerpt": "relevant sentence from page A",
     "page_b_excerpt": "conflicting sentence from page B"
   }

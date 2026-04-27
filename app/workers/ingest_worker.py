@@ -440,6 +440,26 @@ async def _process_ingest_job_async(job_id: uuid.UUID):
             args=[str(workspace_id)], queue="graph", countdown=5
         )
 
+        # Auto-trigger incremental lint pass for pages touched this job
+        try:
+            from app.models.lint_run import LintRun
+            from app.workers.lint_worker import run_lint_pass
+            lint_run = LintRun(
+                workspace_id=workspace_id,
+                scope="incremental",
+                page_ids_scoped=pages_touched_ids,
+            )
+            db.add(lint_run)
+            await db.commit()
+            run_lint_pass.apply_async(args=[str(lint_run.id)], queue="lint")
+            logger.info(
+                "incremental_lint_triggered",
+                lint_run_id=str(lint_run.id),
+                pages_scoped=len(pages_touched_ids),
+            )
+        except Exception as lint_exc:
+            logger.warning("incremental_lint_trigger_failed", error=str(lint_exc))
+
         logger.info(
             "ingest_job_completed",
             job_id=str(job_id),
